@@ -1,0 +1,6 @@
+work/
+config.local.json
+__pycache__/
+.pytest_cache/
+.superpowers/
+*.pyc
