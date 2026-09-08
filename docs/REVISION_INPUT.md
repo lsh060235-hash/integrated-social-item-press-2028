@@ -16,7 +16,7 @@ Windows 한글 COM, 함초롬바탕·맑은 고딕과 README의 의존성이 필
 python -X utf8 press_revision.py build --archive "<첨부 ZIP 절대 경로>" --out work/M01-language-r7-new
 ```
 
-`student/`는 문제지, `teacher/`는 정답·해설, `preview/`는 전 페이지 PNG다. 입력 ZIP, 패킷과 teacher/는 정답 정보를 포함하므로 학생 배포는 student/ 파일만 사용한다. 원고의 풀이·선지 설명을 임의로 윤문하지 않는다.
+`student/`는 문제지, `teacher/`는 정답·해설, `preview/`는 전 페이지 PNG다. 입력 ZIP, 패킷과 teacher/는 정답 정보를 포함하므로 학생 배포는 student/ 파일만 사용한다. 기본 출력은 원문 해설을 보존한다. 사용자가 요청한 해설 윤문은 v0.3의 `--solution-overlay`로 명시적으로 적용한다. 정답·문항은 그대로 두며 기준과 계약은 [SOLUTION_STYLE.md](SOLUTION_STYLE.md)에 있다.
 
 모든 문제지·해설 PNG와 문항별 대조 이미지를 확인한 후 `agent-page-review.json`에 exam_pdf_sha256, exam_pages_reviewed(1부터 마지막까지), solutions_pdf_sha256, solutions_pages_reviewed, item_numbers_reviewed(전체 25문항)를 기록하고 아래 명령으로 반환 묶음을 만든다. 검토 기록은 사람이 했다고 표기하지 않는다. 사람의 최종 출고 승인은 별개다.
 

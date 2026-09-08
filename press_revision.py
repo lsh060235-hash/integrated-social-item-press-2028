@@ -22,6 +22,10 @@ def verify_saved_plan(out):
     verification=json.loads((out/'verification.json').read_text(encoding='utf-8'))
     if sha(out/'visual-plan.json')!=verification.get('visual_plan_sha256'):
         raise ContractError('VISUAL_PLAN_CHANGED_AFTER_BUILD')
+    editorial=out/'solution-editorial.json'
+    if editorial.exists() or verification.get('solution_editorial_sha256'):
+        if not editorial.is_file() or sha(editorial)!=verification.get('solution_editorial_sha256'):
+            raise ContractError('SOLUTION_EDITORIAL_CHANGED_AFTER_BUILD')
 
 
 def forge_provenance(forge_root):
@@ -128,14 +132,17 @@ def validate_revision(packet,archive,forge_root):
     if packet!=load_revision(archive,forge_root):
         raise ContractError('REVISION_PACKET_MISMATCH')
 
-def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,reference_map=None):
+def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,reference_map=None,solution_overlay=None):
     from press import write_json
     from press_layout import build_hwpx,render_hangul
     from press_visuals import build_revision_visuals,make_visual_plan,compile_visual_plan
     from press_verify import (verify_exam,preview_pdf,validate_visual_result,missing_units,sha,
                               build_item_review,balance_last_column)
     import fitz
+    from press_solutions import apply_editorial,verify_solutions
     packet=load_revision(archive,forge_root)
+    editorial=json.loads(Path(solution_overlay).read_text(encoding='utf-8-sig')) if solution_overlay else None
+    teacher_packet=apply_editorial(packet,editorial) if editorial is not None else packet
     plan=(json.loads(Path(visual_plan).read_text(encoding='utf-8-sig')) if visual_plan else
           make_visual_plan(packet['visual_handoff']))
     compile_visual_plan(packet['visual_handoff'],plan)
@@ -151,6 +158,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         dest.parent.mkdir(parents=True,exist_ok=True)
         shutil.copyfile(ROOT/n,dest)
     write_json(out/'input-packet.json',packet)
+    if editorial is not None: write_json(out/'solution-editorial.json',editorial)
     write_json(out/'visual-plan.json',plan)
     result=build_revision_visuals(packet['visual_handoff'],out/'figures',commit,plan)
     write_json(out/'visual-result.json',result)
@@ -174,18 +182,11 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         folder=out/group; folder.mkdir()
         stem={'pilot':'two-items','student':'exam','teacher':'solutions'}[group]
         hwpx,pdf=folder/(stem+'.hwpx'),folder/(stem+'.pdf')
-        build_hwpx(packet,hwpx,numbers,teacher=teacher,
+        build_hwpx(teacher_packet if teacher else packet,hwpx,numbers,teacher=teacher,
             visuals=None if teacher else result,artifact_root=out/'figures')
         render[group]=render_hangul(hwpx,pdf)
         if teacher:
-            with fitz.open(pdf) as d:
-                text='\n'.join(p.get_text() for p in d)
-                units=[]
-                for item in packet['items']:
-                    t=item['teacher']
-                    units.extend([t['rationale']]+[s['operation'] for s in t['solution_steps']]
-                                 +[e['refutation'] for e in t['choice_evaluations'] if e.get('refutation')])
-                if missing_units(units,text): raise ContractError('SOLUTION_TEXT_MISSING')
+            verify_solutions(teacher_packet,pdf)
         else:
             check=verify_exam(packet,hwpx,pdf,result,out/'figures',numbers)
             if check['mechanical_status']!='PASS': raise ContractError('RENDER_VERIFICATION_FAILED: '+repr(check['errors']))
@@ -209,6 +210,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         'source_status':packet['status'],'source_binding':packet['binding'],
         'layout_adjustments':adjustments,'visual_plan_sha256':sha(out/'visual-plan.json'),
         'agent_page_review':'PENDING','human_release_approval':None})
+    if editorial is not None: verification['solution_editorial_sha256']=sha(out/'solution-editorial.json')
     reference=None
     if reference_pdf:
         maps=json.loads(Path(reference_map or ROOT/'profiles/kice-reference-map.json').read_text(encoding='utf-8-sig'))
@@ -243,6 +245,10 @@ def seal_revision(archive,forge_root,out):
     verify_saved_plan(out)
     packet=json.loads((out/'input-packet.json').read_text(encoding='utf-8'))
     validate_revision(packet,archive,forge_root)
+    from press_solutions import apply_editorial,verify_solutions
+    editorial=out/'solution-editorial.json'
+    teacher_packet=apply_editorial(packet,json.loads(editorial.read_text(encoding='utf-8'))) if editorial.exists() else packet
+    verify_solutions(teacher_packet,out/'teacher/solutions.pdf')
     if sha(out/'source-input.zip')!=packet['binding']['source_zip_sha256']:
         raise ContractError('SOURCE_COPY_MISMATCH')
     result=json.loads((out/'visual-result.json').read_text(encoding='utf-8'))
@@ -275,6 +281,7 @@ def main():
     parser.add_argument('--visual-plan',type=Path,help='Source-bound figure selectors exported by plan')
     parser.add_argument('--reference-pdf',type=Path,help='Local official reference PDF for per-item comparison')
     parser.add_argument('--reference-map',type=Path,help='Reference SHA, campaign mapping and crop coordinates')
+    parser.add_argument('--solution-overlay',type=Path,help='Source-bound editorial explanations; preserves original teacher evidence')
     args=parser.parse_args()
     if args.command=='verify':
         from press_verify import verify_manifest
@@ -289,7 +296,7 @@ def main():
             packet=load_revision(args.archive,args.forge_root)
             write_json(args.out,make_visual_plan(packet['visual_handoff']))
         elif args.command=='build':
-            build_revision(args.archive,args.forge_root,args.out,args.visual_plan,args.reference_pdf,args.reference_map)
+            build_revision(args.archive,args.forge_root,args.out,args.visual_plan,args.reference_pdf,args.reference_map,args.solution_overlay)
         else:
             seal_revision(args.archive,args.forge_root,args.out)
 
