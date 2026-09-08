@@ -115,7 +115,8 @@ def _table(doc, rows, char, para, width_mm=INNER_MM, header=True):
             if header and ri==0 and len(value)>=10:
                 shown=re.sub(r'\s*(\([^()]+\))$',r'\n\1',value)
                 spaces=[i for i,c in enumerate(value) if c==' ']
-                if shown==value and spaces:
+                estimated=sum(2 if unicodedata.east_asian_width(c) in 'WFA' else 1 for c in value)*DATA_SIZE/2
+                if shown==value and spaces and len(value)<=18 and estimated>widths[ci]/100-4.6:
                     split=min(spaces,key=lambda i:abs(i-len(value)/2))
                     shown=value[:split]+'\n'+value[split+1:]
             cell.set_text(shown)
