@@ -284,7 +284,8 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
             para_pr_id_ref=paras['title'],char_pr_id_ref=chars['data'])
         _first_page_rule(doc,identity,header)
     start=doc.add_paragraph('',para_pr_id_ref=paras['spacer'],char_pr_id_ref=chars['small'])
-    doc.set_columns(2,col_type='NEWSPAPER',same_gap=round(11*UNIT),
+    col_type='BALANCED_NEWSPAPER' if teacher and any('editorial_solution' in i for i in items) else 'NEWSPAPER'
+    doc.set_columns(2,col_type=col_type,same_gap=round(11*UNIT),
                     separator_type='SOLID',separator_width='0.12 mm',separator_color='#000000',paragraph=start)
     for idx,item in enumerate(items):
         if idx and item['number'] in column_starts:
