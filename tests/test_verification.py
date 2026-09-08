@@ -3,6 +3,15 @@ from pathlib import Path
 import pytest
 import press_verify as verify
 
+def test_page_frame_requires_rendered_header_and_full_height_divider():
+    import fitz
+    d=fitz.open();p=d.new_page(width=842,height=1189)
+    p.draw_line((71,116),(737,116))
+    p.draw_line((404,224),(404,740))
+    assert not verify.has_page_frame(p)
+    p.draw_line((404,224),(404,1069))
+    assert verify.has_page_frame(p)
+
 def test_return_verifier_rejects_missing_or_changed_files(tmp_path):
     (tmp_path/'a.txt').write_text('original',encoding='utf-8')
     manifest=verify.make_manifest(tmp_path, {'items_sha256':'a'*64})

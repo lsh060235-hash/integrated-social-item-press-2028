@@ -130,12 +130,21 @@ def preview_pdf(pdf:Path,out:Path) -> dict:
     return {'page_count':len(thumbs),'contact_sheet':(out/'all-pages.png').as_posix()}
 
 
+def has_page_frame(page):
+    rects=[drawing['rect'] for drawing in page.get_drawings()]
+    horizontal=any(r.width>600 and r.height<2 and 90<r.y0<150 for r in rects)
+    vertical=any(r.height>800 and r.width<2 and abs(r.x0-page.rect.width/2)<25
+                 and r.y0<250 and 1050<r.y1<1085 for r in rects)
+    return horizontal and vertical
+
+
 def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
     items=[i for i in packet['items'] if item_numbers is None or i['number'] in item_numbers]
     display=visual_result.get('display',{})
     errors=[]
     with zipfile.ZipFile(hwpx) as z:
         roots=[ET.fromstring(z.read(n)) for n in z.namelist() if re.fullmatch(r'Contents/section\d+\.xml',n)]
+        has_native_frame=any(r.findall('.//{*}header//{*}line') for r in roots)
         native='\n'.join(t.text or '' for r in roots for t in r.iter() if t.tag.endswith('}t'))
         tables=sum(1 for r in roots for t in r.iter() if t.tag.endswith('}tbl'))
         images={hashlib.sha256(z.read(n)).hexdigest() for n in z.namelist() if n.startswith('BinData/')}
@@ -151,6 +160,7 @@ def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
         text='\n'.join(p.get_text() for p in doc)
         columns=[]
         for pn,page in enumerate(doc,1):
+            if has_native_frame and not has_page_frame(page): errors.append('RENDERED_PAGE_FRAME_MISSING: '+str(pn))
             if '편집 검토 초안' not in page.get_text(): errors.append('PAGE_HEADER_MISSING')
             if not(835<page.rect.width<850 and 1180<page.rect.height<1200):
                 errors.append('NOT_A3_PORTRAIT')
@@ -229,4 +239,5 @@ def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
         'graphic_source_units_bound':rendered_units,'missing_source_units':missing,
         'locations':locations,'fonts':fonts,'human_release_approval':None,
         'pdf_figure_pixel_checks':figure_pixels,
+        'page_frame_checked':has_native_frame,
         'visual_semantic_review':'REQUIRES_PAGE_AND_FIGURE_REVIEW'}

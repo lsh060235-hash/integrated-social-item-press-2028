@@ -140,7 +140,8 @@ def build_revision(archive,forge_root,out):
         stem={'pilot':'two-items','student':'exam','teacher':'solutions'}[group]
         hwpx,pdf=folder/(stem+'.hwpx'),folder/(stem+'.pdf')
         build_hwpx(packet,hwpx,numbers,teacher=teacher,
-            visuals=None if teacher else result,artifact_root=out/'figures')
+            visuals=None if teacher else result,artifact_root=out/'figures',
+            column_starts=(25,) if group=='student' and packet['campaign_id'].endswith('M02') else ())
         render[group]=render_hangul(hwpx,pdf)
         preview_pdf(pdf,out/'preview'/group)
         if teacher:

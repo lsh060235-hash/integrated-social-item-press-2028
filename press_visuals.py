@@ -51,7 +51,18 @@ _RULES: dict[tuple[str, str], tuple[str, tuple[int, ...], bool]] = {
 }
 
 _REVISION_RULES = dict(_RULES)
+_REVISION_RULES[("FRG-SOC-2028-M01-Q03", "DIARY-A")] = ("serif_schematic", (1, 2), True)
 _REVISION_RULES[("FRG-SOC-2028-M01-Q14", "STREET-A")] = ("table", (2, 3, 4, 5, 6), False)
+for _number, _data, _mode in (
+    (5, "FLOOD-A", "revision_flood"),
+    (7, "FLOW-A", "revision_flow"),
+    (13, "WORK-A", "revision_work_bars"),
+    (16, "SHIFT-A", "revision_shift"),
+    (19, "INDEX-B", "revision_index_bars"),
+):
+    _pair = (f"FRG-SOC-2028-M01-Q{_number:02}", _data)
+    _, _indices, _replace = _REVISION_RULES[_pair]
+    _REVISION_RULES[_pair] = (_mode, _indices, _replace)
 for _number, _data, _mode, _indices, _replace in (
     (1, "CASE-B", "table", (1, 2, 3, 4, 5), False),
     (2, "MAP-A", "revision_watershed", (0,), False),
@@ -89,6 +100,26 @@ def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit
 
 def _revision_topology(mode: str, lines: list[str]) -> dict[str, Any]:
     content = "\n".join(lines)
+    if mode == "revision_flood":
+        panels = []
+        for group in (lines[:4], lines[4:]):
+            _, rows = _table_rows(group)
+            panels.append({"label": rows[0][0], "rows": rows[1:]})
+        return {"type": "paired_spatial_grids", "panels": panels}
+    if mode == "revision_flow":
+        branches = []
+        for line in lines:
+            parent, children = line.split(" → ")
+            branches.append({"parent": parent, "children": [part.split(": ", 1) for part in children.split(" / ")]})
+        return {"type": "fraction_flow", "branches": branches, "fractions": [child[1] for branch in branches for child in branch["children"]]}
+    if mode in {"revision_work_bars", "revision_index_bars"}:
+        is_work = mode == "revision_work_bars"
+        return {"type": "horizontal_bar_chart", "series": _parse_series("bar_matrix" if is_work else "bar_list", lines), "categories": _cells(lines[0])[1:] if is_work else [], "unit": "kWh/주" if is_work else "지수", "segment_value": 10}
+    if mode == "revision_shift":
+        intervals = [re.findall(r"\d{2}:\d{2}", line)[:2] for line in lines]
+        if any(len(interval) != 2 for interval in intervals):
+            raise VisualBuildError("TIMELINE_INTERVAL_UNREADABLE")
+        return {"type": "time_intervals", "intervals": intervals, "descriptions": lines}
     if mode == "revision_watershed":
         match = re.fullmatch(r"가상 유역에서 서쪽 지류는 (.+?)을 지나 (\w)로, 동쪽 지류는 (.+?)를 지나 (\w)로 흐른다. (\w)와 (\w)를 지난 물은 (\w)에서 합류한다.", content)
         if match is None or match.group(2, 4) != match.group(5, 6):
@@ -147,6 +178,102 @@ def _revision_ops(mode, topology, font):
         width = max(100, font.getlength(value) + 34)
         ops.append(("rect", x - width / 2, y, x + width / 2, y + 70, 3))
         text(x - font.getlength(value) / 2, y + 10, value, {"data-node": value})
+
+    if mode == "revision_flood":
+        for index, panel in enumerate(topology["panels"]):
+            left = 30 + index * 660
+            text(left + 20, 25, panel["label"])
+            for row, cells in enumerate(panel["rows"]):
+                for column, value in enumerate(cells):
+                    x, y = left + column * 200, 100 + row * 125
+                    ops.append(("rect", x, y, x + 200, y + 125, 2, {"data-flood-cell": value.split(":")[0], "data-panel": str(index)}))
+                    text(x + (200 - font.getlength(value)) / 2, y + 40, value)
+        return 380, ops
+    if mode == "revision_flow":
+        first, second = topology["branches"]
+
+        def flow_box(x, y, value, width):
+            parts = _wrap(value, font, width - 36)
+            box_height = len(parts) * 58 + 20
+            ops.append(("rect", x - width / 2, y, x + width / 2, y + box_height, 2))
+            for i, part in enumerate(parts):
+                text(x - font.getlength(part) / 2, y + 10 + i * 58, part)
+            return box_height
+
+        root = first["parent"]
+        flow_box(660, 20, root, 300)
+        for i, (label, fraction) in enumerate(first["children"]):
+            x = (360, 1080)[i]
+            edge = _arrow_ops(660, 98, x, 235)
+            edge[0] += ({"data-flow-edge": f"0-{i}"},)
+            ops.extend(edge)
+            text((120, 960)[i], 145, fraction)
+            flow_box(x, 235, label, 270)
+        for i, (label, fraction) in enumerate(second["children"]):
+            x = (250, 790)[i]
+            edge = _arrow_ops(360, 313, x, 500)
+            edge[0] += ({"data-flow-edge": f"1-{i}"},)
+            ops.extend(edge)
+            text((35, 690)[i], 385, fraction)
+            flow_box(x, 500, label, (420, 510)[i])
+        return 665, ops
+    if mode in {"revision_work_bars", "revision_index_bars"}:
+        is_work = mode == "revision_work_bars"
+        rows = []
+        for series in topology["series"]:
+            for i, value in enumerate(series["values"]):
+                rows.append((series["label"], topology["categories"][i] if is_work else series["label"], value))
+        axis_x, axis_width = 440, 770
+        row_height = 70
+        top = 155
+        height = top + len(rows) * row_height + (60 if is_work else 0) + 35
+        text(30, 15, f'({topology["unit"]})')
+        if is_work:
+            text(30, 80, "대안")
+        ops.append(("line", axis_x, 108, axis_x + axis_width, 108, 2))
+        ops.append(("line", axis_x, 108, axis_x, height - 35, 2, {"data-zero-axis": "0"}))
+        for tick in range(0, 121, 20):
+            x = axis_x + axis_width * tick / 120
+            ops.append(("line", x, 100, x, 116, 2))
+            text(x - font.getlength(str(tick)) / 2, 48, str(tick), {"data-axis-tick": str(tick)})
+        y = top
+        for index, (group, label, value) in enumerate(rows):
+            if is_work and index % 3 == 0:
+                if index:
+                    y += 30
+                text(35, y + row_height, group)
+            text(110 if is_work else 35, y + 2, label, {"data-bar-label": str(index)})
+            ops.extend(_bar_segment_ops(axis_x + 2, y + 7, axis_width, 40, value, 120, group))
+            text(axis_x + axis_width * value / 120 + 10, y, str(value))
+            y += row_height
+        return height, ops
+    if mode == "revision_shift":
+        def minute(value):
+            hour, minutes = map(int, value.split(":"))
+            return hour * 60 + minutes
+
+        intervals = topology["intervals"]
+        first = minute(intervals[0][0])
+        span = minute(intervals[-1][1]) - first
+        left, width = 65, 1160
+        for index, (start, end) in enumerate(intervals):
+            x1 = left + (minute(start) - first) * width / span
+            x2 = left + (minute(end) - first) * width / span
+            ops.append(("rect", x1, 90, x2, 155, 2, {"data-time-interval": f"{start}-{end}"}))
+        boundaries = [interval[0] for interval in intervals] + [intervals[-1][1]]
+        for index, time in enumerate(boundaries):
+            x = left + (minute(time) - first) * width / span
+            above = index in (0, 1, 3, 5)
+            ops.append(("line", x, 75 if above else 155, x, 90 if above else 170, 2))
+            text(x - font.getlength(time) / 2, 20 if above else 175, time)
+        body_height, body = _schematic_ops(topology["descriptions"], font)
+        for op in body:
+            shifted = list(op)
+            shifted[2] += 245
+            if op[0] != "text":
+                shifted[4] += 245
+            ops.append(tuple(shifted))
+        return body_height + 245, ops
 
     if mode == "revision_watershed":
         p, q, r = topology["nodes"]
@@ -234,14 +361,15 @@ def _revision_ops(mode, topology, font):
             baseline = y + 340
             ops.append(("line", x + 35, baseline, x + panel_width - 15, baseline, 2))
             scale = 30 if index % 2 == 0 else 300
+            previous_label_end = x
             for position, (period, value) in enumerate(zip(topology["periods"], series["values"])):
                 center = x + 92 + position * 140
                 top = baseline - value / scale * 225
                 ops.append(("rect", center - 34, top, center + 34, baseline, 3, {"data-climate-value": str(value), "data-series": series["label"], "data-period": period}))
                 text(center - font.getlength(str(value)) / 2, top - 55, str(value))
-                # Calendar labels wrap without changing their order or adding seasons.
-                for line_number, part in enumerate(_wrap(period, font, 136)):
-                    text(center - font.getlength(part) / 2, baseline + 12 + line_number * 52, part)
+                label_x = max(center - font.getlength(period) / 2, previous_label_end + 20)
+                text(label_x, baseline + 12, period)
+                previous_label_end = label_x + font.getlength(period)
         return 990, ops
     raise VisualBuildError(f"UNSUPPORTED_RENDER_MODE: {mode}")
 
@@ -717,10 +845,11 @@ def _render(
             )
     width_mm = _WIDTH / _DPI * 25.4
     height_mm = height / _DPI * 25.4
+    svg_font_family = "Batang" if font_path.name.lower().startswith("batang") else "Malgun Gothic"
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_mm:.2f}mm" height="{height_mm:.2f}mm" '
         f'viewBox="0 0 {_WIDTH} {height}"><rect width="100%" height="100%" fill="white"/>'
-        f'<g font-family="Malgun Gothic, Batang" font-size="{_FONT_SIZE}px" fill="black" '
+        f'<g font-family="{svg_font_family}" font-size="{_FONT_SIZE}px" fill="black" '
         f'style="white-space:pre">{"".join(svg_ops)}</g>'
         f'<!-- raster font: {html.escape(font_path.name)} --></svg>\n'
     )
@@ -764,14 +893,18 @@ def _build_visuals(request, out_root, press_commit, rules):
         png_rel = Path("png") / f"{stem}.png"
         topology = (_revision_topology(mode, core_lines) if mode.startswith("revision_")
                     else _topology_for(pair, source_lines, core_lines))
+        figure_font, figure_font_path = font, font_path
+        if mode == "serif_schematic":
+            figure_font_path = Path("C:/Windows/Fonts/batang.ttc")
+            figure_font = ImageFont.truetype(str(figure_font_path), _FONT_SIZE)
         width_mm, height_mm = _render(
             mode,
             core_lines,
             topology,
             root / png_rel,
             root / svg_rel,
-            font,
-            font_path,
+            figure_font,
+            figure_font_path,
         )
         core_variables: dict[str, Any] = {"lines": core_lines}
         if topology is not None:
@@ -796,7 +929,7 @@ def _build_visuals(request, out_root, press_commit, rules):
             "core_variables": core_variables,
             "width_mm": width_mm,
             "height_mm": height_mm,
-            "font_family": "Malgun Gothic" if font_path.name.lower().startswith("malgun") else "Batang",
+            "font_family": "Malgun Gothic" if figure_font_path.name.lower().startswith("malgun") else "Batang",
             "minimum_font_pt": _FONT_SIZE * 72 / _DPI,
             "color_mode": "black_and_white",
         }

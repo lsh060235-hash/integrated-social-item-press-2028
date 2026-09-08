@@ -6,7 +6,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import press_visuals
 from test_visuals import validate_visual_artifacts
@@ -131,3 +131,96 @@ def test_revision_builder_rejects_stale_content_and_unknown_requests(tmp_path):
     source['requests'][0]['data_id'] = '../outside'
     with pytest.raises(press_visuals.VisualBuildError, match='UNSUPPORTED_VISUAL_REQUEST'):
         press_visuals.build_revision_visuals(source, tmp_path, 'a' * 40)
+
+
+def test_m01_flood_panels_preserve_common_two_by_three_spatial_cells(built):
+    svg, spec, _ = figure(built, 'M01', 5, 'FLOOD-A')
+    cells = svg.findall('.//s:rect[@data-flood-cell]', NS)
+    assert len(cells) == 12
+    assert spec['core_variables']['topology']['panels'] == [
+        {'label': '주거 인원(명)', 'rows': [['A: 10', 'B: 10', 'C: 10'], ['D: 20', 'E: 70', 'F: 200']]},
+        {'label': '침수 범위', 'rows': [['A: 내부', 'B: 내부', 'C: 내부'], ['D: 내부', 'E: 경계', 'F: 외부']]},
+    ]
+    for panel in ('0', '1'):
+        selected = [c for c in cells if c.attrib['data-panel'] == panel]
+        assert len({c.attrib['y'] for c in selected}) == 2
+        assert len({c.attrib['x'] for c in selected}) == 3
+
+
+def test_m01_record_card_svg_and_raster_spec_use_same_serif_font(built):
+    svg, spec, _ = figure(built, 'M01', 3, 'DIARY-A')
+    assert svg.find('s:g', NS).attrib['font-family'].split(',')[0] == spec['font_family'] == 'Batang'
+
+
+def test_flood_grid_panels_do_not_overlap_or_cover_third_column_glyphs(built):
+    svg, _, display = figure(built, 'M01', 5, 'FLOOD-A')
+    panels = [[cell for cell in svg.findall('.//s:rect[@data-flood-cell]', NS) if cell.attrib['data-panel'] == str(index)] for index in (0, 1)]
+    assert max(float(c.attrib['x']) + float(c.attrib['width']) for c in panels[0]) < min(float(c.attrib['x']) for c in panels[1])
+    assert all(0 <= float(c.attrib['x']) < float(c.attrib['x']) + float(c.attrib['width']) <= float(svg.attrib['viewBox'].split()[2]) for panel in panels for c in panel)
+    font = ImageFont.truetype('C:/Windows/Fonts/malgun.ttf', 42)
+    root, _ = built
+    with Image.open(root / 'M01' / display['png_path']) as png:
+        for label in ('C: 10', 'F: 200'):
+            text = next(t for t in svg.findall('.//s:text', NS) if t.text == label)
+            x, y = float(text.attrib['x']), float(text.attrib['y'])
+            mask = Image.new('L', png.size, 255)
+            ImageDraw.Draw(mask).text((x, y), label, font=font, fill=0)
+            pixels = [(px, py) for py in range(int(y), int(y) + 60) for px in range(int(x), int(x) + 160) if mask.getpixel((px, py)) < 64]
+            assert len(pixels) > 300
+            assert sum(png.getpixel(point) < 128 for point in pixels) / len(pixels) > .99
+
+
+@pytest.mark.parametrize('number,data,unit', [(13, 'WORK-A', '(kWh/주)'), (19, 'INDEX-B', '(지수)')])
+def test_chart_unit_glyph_bounds_do_not_intersect_tick_labels(built, number, data, unit):
+    svg, _, _ = figure(built, 'M01', number, data)
+    font = ImageFont.truetype('C:/Windows/Fonts/malgun.ttf', 42)
+    def bounds(text):
+        x, y = float(text.attrib['x']), float(text.attrib['y'])
+        a, b, c, d = font.getbbox(text.text)
+        return x + a, y + b, x + c, y + d
+    unit_bounds = bounds(next(t for t in svg.findall('.//s:text', NS) if t.text == unit))
+    for tick in svg.findall('.//s:text[@data-axis-tick]', NS):
+        b = bounds(tick)
+        assert unit_bounds[2] <= b[0] or b[2] <= unit_bounds[0] or unit_bounds[3] <= b[1] or b[3] <= unit_bounds[1]
+
+
+def test_m02_climate_calendar_labels_stay_on_one_line_with_month_unit(built):
+    svg, _, _ = figure(built, 'M02', 5, 'DATA-A')
+    for period in ('1~3월', '4~6월', '7~9월', '10~12월'):
+        assert sum(t.text == period for t in svg.findall('.//s:text', NS)) == 4
+    font = ImageFont.truetype('C:/Windows/Fonts/malgun.ttf', 42)
+    rows = {}
+    for t in svg.findall('.//s:text', NS):
+        if t.text in ('1~3월', '4~6월', '7~9월', '10~12월'):
+            rows.setdefault(t.attrib['y'], []).append((float(t.attrib['x']), font.getlength(t.text)))
+    for row in rows.values():
+        row.sort()
+        assert all(left + width + 16 <= right for (left, width), (right, _) in zip(row, row[1:]))
+
+
+def test_m01_container_flow_branches_without_calculated_counts(built):
+    svg, spec, _ = figure(built, 'M01', 7, 'FLOW-A')
+    assert len(svg.findall('.//s:line[@data-flow-edge]', NS)) == 4
+    assert spec['core_variables']['topology']['fractions'] == ['출고량의 3/4', '나머지', '회수량의 1/2', '나머지']
+    assert not any(value in ''.join(svg.itertext()) for value in ('180', '90', '60', '150', '37.5'))
+
+
+@pytest.mark.parametrize('number,data,count', [(13, 'WORK-A', 9), (19, 'INDEX-B', 4)])
+def test_m01_statistical_charts_have_shared_zero_axis_and_source_segments(built, number, data, count):
+    svg, spec, _ = figure(built, 'M01', number, data)
+    assert len(svg.findall('.//s:line[@data-zero-axis]', NS)) == 1
+    assert len(svg.findall('.//s:text[@data-bar-label]', NS)) == count
+    ticks = svg.findall('.//s:text[@data-axis-tick]', NS)
+    assert [t.text for t in ticks] == ['0', '20', '40', '60', '80', '100', '120']
+    segments = svg.findall('.//s:rect[@data-segment]', NS)
+    assert len(segments) == (48 if number == 13 else 39)
+
+
+def test_m01_shift_timeline_keeps_exact_boundaries_without_legal_classification(built):
+    svg, spec, _ = figure(built, 'M01', 16, 'SHIFT-A')
+    intervals = spec['core_variables'].get('topology', {}).get('intervals')
+    assert intervals == [['09:00', '12:00'], ['12:00', '12:30'], ['12:30', '14:00'], ['14:00', '14:30'], ['14:30', '15:30'], ['15:30', '15:45']]
+    bars = svg.findall('.//s:rect[@data-time-interval]', NS)
+    assert len(bars) == 6
+    assert float(bars[0].attrib['width']) / float(bars[-1].attrib['width']) == pytest.approx(12, rel=.001)
+    assert not any(value in ''.join(svg.itertext()) for value in ('총 근로', '법정', '위반', '분 합계'))

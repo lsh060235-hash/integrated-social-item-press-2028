@@ -32,17 +32,35 @@ def test_hwpx_is_editable_and_has_no_teacher_or_template_content(tmp_path):
         assert '① 변화 없음' in text and '⑤ 모두 허용' in text
         assert '비밀해설_SENTINEL' not in text and 'ARCHIVE-A' not in text
         assert '과학탐구' not in text
-        assert len(root.findall('.//hp:tbl',NS)) == 1
+        tables = root.findall('.//hp:tbl',NS)
+        assert len(tables) == 2  # editable material frame plus nested data table
+        frame = root.find('.//hp:tbl[@rowCnt="1"][@colCnt="1"]', NS)
+        assert frame.find('.//hp:tbl[@rowCnt="3"]', NS) is not None
+        assert '동일한 두 구역이다.' in ''.join(t.text or '' for t in frame.findall('.//hp:t', NS))
         assert root.find('.//hp:colPr[@colCount="2"]',NS) is not None
         assert not any('masterpage' in n for n in z.namelist())
         page=root.find('.//hp:pagePr',NS)
         assert page.get('landscape') == 'WIDELY', 'Matches native Hancom portrait blank'
         assert root.find('.//hp:secPr/hp:header',NS) is None, 'Headers are controls, not section properties'
+        assert len(root.findall('.//hp:ctrl/hp:header//hp:line',NS))==2, 'Page rules must reach the native header control'
 
 def test_source_choices_not_silently_truncated(tmp_path):
     data=packet(); data['items'][0]['student_view']['choices'].pop()
     with pytest.raises(ValueError, match='CHOICES'):
         layout.build_hwpx(data,tmp_path/'bad.hwpx')
+
+
+def test_paired_choices_keep_every_original_token_in_row_order(tmp_path):
+    data=packet()
+    data['items'][0]['student_view']['choices']=['갑 P — 을 R','갑 Q — 을 P','갑 Q — 을 R','갑 R — 을 Q','갑 R — 을 P']
+    out=tmp_path/'pairs.hwpx'; layout.build_hwpx(data,out)
+    with zipfile.ZipFile(out) as z:
+        root=ET.fromstring(z.read('Contents/section0.xml'))
+        answer=root.find('.//hp:tbl[@rowCnt="5"][@colCnt="3"]',NS)
+        assert answer is not None
+        for index,row in enumerate(answer.findall('hp:tr',NS)):
+            text=''.join(t.text or '' for t in row.findall('.//hp:t',NS))
+            assert ''.join(text.split())==''.join((layout.CIRCLED[index]+data['items'][0]['student_view']['choices'][index]).split())
 
 def test_revision_edition_is_visible_in_output(tmp_path):
     data=packet(); data['edition_label']='FRG-SOC-M01 · 표현교정 r7'
