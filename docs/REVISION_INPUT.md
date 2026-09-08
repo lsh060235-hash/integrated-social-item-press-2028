@@ -1,8 +1,12 @@
 # 교정 검토 ZIP 입력 v0.1
 
-기존 승인 캠페인 입력과 별도로, 사용자가 제공한 `social-language-review-delivery-v1` ZIP을 편집 검토 초안으로 제작한다. M01 language-r7과 M02 language-r1을 대상으로 한다. 새 문항을 출제하거나 조건부 의견을 해결했다고 표시하지 않는다.
+기존 승인 캠페인 입력과 별도로, 사용자가 제공한 검토 ZIP을 편집 검토 초안으로 제작한다. 종전 `social-language-review-delivery-v1`과 새 `FILE_MANIFEST.json` 묶음을 받는다. 새 문항을 출제하거나 조건부 의견을 해결했다고 표시하지 않는다.
 
 `press_revision.py`는 ZIP 내부 경로·중복·manifest의 모든 파일 SHA 및 크기를 검사한다. items·ItemSpec·Blueprint 해시를 재계산하고 현재 정본으로 5역할 패킷 125건과 visual handoff를 재구성해 첨부된 파일과 비교한다. Forge의 `collect_review_results`로 검수자 분리·현재 문항 및 패킷 해시·solver 응답을 다시 확인한다. 원본 ZIP과 모든 회원 파일 해시를 반환에 결합한다.
+
+새 묶음은 `FILE_MANIFEST.json`의 경로→SHA-256 전체 목록과 `DELIVERY_STATUS.json`, `reviews/review_packets.json`, `reviews/review_results.json`을 사용한다. 크기가 명시된 종전 manifest는 크기도 검사한다. 두 manifest가 함께 있거나 파일 목록이 맞지 않으면 거부한다. 새 형식은 현재 상태 파일의 정본 3종·125개 패킷 해시를 검증하고, 재수집한 역할별 판정 수 및 전 역할 PASS 문항 목록까지 대조한다. `production_check.json`은 이전 저자 점검 시점의 기록일 수 있으므로 현재 승인으로 해석하지 않는다. 판본은 `source_folder`의 마지막 경로 요소이며, 원래 ZIP을 변환하거나 새 Forge 공식 출고로 가장하지 않는다.
+
+검증한 새 입력은 M01 `2026-09-08-language-v2-r1`, M02 `2026-09-08-language-v2-r2`, M03 `v4`이다. 세 묶음 모두 독립 풀이 두 역할의 25개 PASS를 포함하지만 내용·난도 조건부 문항은 각각 19·21·5개다. M02·M03의 교육과정 포괄 문제도 그대로 반환한다. 원문의 `RENDER_NOT_REVIEWED` 기록은 당시 Forge 검토 범위이며, Press의 후속 실제 렌더 검토는 별도 파일에 남긴다.
 
 새 입력의 `schema_version`은 `integrated-social-press-revision-input-v0.1`이다. 기존 문항 entry 구조에 source_version, edition_label, source_zip_sha256을 추가하며 source status와 blueprint_issue를 보존한다. `official_forge_export`는 false, `human_release_approval`은 null이다. 기존 승인본 영수증과 연결하지 않는다. Forge 원본이나 지원 상태 파일은 수정하지 않는다.
 

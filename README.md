@@ -1,4 +1,4 @@
-# Integrated Social Item Press 2028 v0.3
+# Integrated Social Item Press 2028 v0.4
 
 통합사회 Forge의 검토 ZIP을 편집 가능한 HWPX와 한글에서 실제 변환한 PDF로 제작한다. 입력의 조건부 의견과 미승인 상태를 보존한다. 문항 출제·정답 변경·최종 출고 승인은 Forge와 사람의 영역이다. 사용자가 요청한 해설 윤문은 원문 해시에 연결한 별도 교정본으로 적용한다.
 
@@ -12,6 +12,8 @@ python -X utf8 -m pytest -q
 ```
 
 전체 회귀 테스트에는 Windows 글꼴, Forge와 M01 r7·M02 r1 원본 검토 ZIP이 필요하다. 경로를 생략하면 저장소 옆 `integrated-social-item-forge`, `outputs/social-language-20260908`을 사용한다. 통합 테스트를 요청했는데 입력이 없으면 오류로 종료한다.
+
+v0.4의 최신 묶음 테스트에는 M01 language-v2-r1·M02 language-v2-r2·M03 higher-v4 ZIP도 필요하다. 기본 위치는 Forge의 `deliveries/2026-09-08-language-v2`이며 `PRESS_DELIVERY_ROOT`로 바꿀 수 있다. 새 `FILE_MANIFEST.json`/통합 검토 기록과 종전 개별 패킷 형식을 모두 검사한다.
 
 ```powershell
 $env:PRESS_FORGE_ROOT = 'C:/path/to/forge'

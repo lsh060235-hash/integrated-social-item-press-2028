@@ -19,11 +19,12 @@ COLUMN_MM = 112
 MATERIAL_MM = 109
 INNER_MM = 105.8
 CIRCLED = '①②③④⑤'
-# Item-specific grouping from the 50-item reference comparison. Dialogue versus
+# Item-specific grouping from the source/reference comparison. Dialogue versus
 # independent case/rule stays in separate cards; related data/notes share a card.
 UNIFIED_MATERIAL = {
     'M01': {2,3,4,5,8,9,11,12,14,15,18,19,20,21,22,25},
     'M02': {2,6,7,8,9,10,11,12,17,18,19,20,21,23,24,25},
+    'M03': {3,5,6,9,12,13,19,21,22,23,24,25},
 }
 
 
