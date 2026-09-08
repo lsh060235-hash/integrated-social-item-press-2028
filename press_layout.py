@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from copy import deepcopy
 from pathlib import Path
 from hwpx.document import HwpxDocument
@@ -71,7 +72,7 @@ def _formats(doc):
     head = doc.headers[0]
     para = {}
     for name, spacing, after, keep, align in [
-        ('body',125,30,True,'JUSTIFY'), ('last',125,1500,False,'JUSTIFY'),
+        ('body',125,30,True,'JUSTIFY'), ('last',125,900,False,'JUSTIFY'),
         ('prompt',130,400,True,'JUSTIFY'), ('data',125,170,True,'JUSTIFY'),
         ('note',120,130,True,'LEFT'), ('dialogue',125,150,True,'JUSTIFY'),
         ('frame',100,450,True,'LEFT'),
@@ -109,7 +110,9 @@ def _table(doc, rows, char, para, width_mm=INNER_MM):
         for ci,value in enumerate(row):
             cell=table.cell(ri,ci)
             cell.element.set('hasMargin','1')
-            cell.set_text(value)
+            # Keep a long unit together on its own header line where the source provides one.
+            shown=re.sub(r'\s*(\([^()]+\))$',r'\n\1',value) if ri==0 and len(value)>10 else value
+            cell.set_text(shown)
             cell.set_size(height=int(heights[ri]))
             sub=cell.element.find(HP+'subList')
             if sub is not None:
@@ -144,14 +147,28 @@ def _material_frame(doc, paragraphs, chars, paras):
     return table
 
 
-def _paired_choices(doc, choices, chars, paras):
+def _paired_choices(doc, choices, chars, paras, conditions=()):
     parts=[re.fullmatch(r'(.+?)\s+(—|/)\s+(.+)',c) for c in choices]
     if not all(parts) or max(map(len,choices))>30:
         return False
     rows=[[CIRCLED[n]+' '+m[1],m[2],m[3]] for n,m in enumerate(parts)]
+    headers=[]
+    for condition in conditions:
+        match=re.search(r'선지는 (.+?) / (.+?)에 지급할 총지원량\(단위\)을 나타낸다\.',condition['content'])
+        if match: headers=[match[1],'',match[2]];break
+    if headers: rows.insert(0,headers)
     table=_table(doc,rows,chars,paras,width_mm=76)
     table.set_column_widths([45,10,45])
     table.paragraph.element.set('paraPrIDRef',paras['last'])
+    _borderless(doc, table)
+    for n in range(len(rows)):
+        for c in range(3):
+            for p in table.cell(n,c).paragraphs:
+                p.element.set('paraPrIDRef',paras['cell_text' if c==0 and not(headers and n==0) else 'cell'])
+    return True
+
+
+def _borderless(doc, table):
     fills=doc.headers[0].element.find('.//'+HH+'borderFills')
     source=next(b for b in fills if b.get('id')==table.element.get('borderFillIDRef'))
     blank=deepcopy(source)
@@ -161,12 +178,24 @@ def _paired_choices(doc, choices, chars, paras):
         if edge.tag.endswith('Border'): edge.set('type','NONE')
     fills.append(blank);fills.set('itemCnt',str(len(fills)))
     table.element.set('borderFillIDRef',identifier)
-    for n in range(5):
-        for c in range(3):
-            cell=table.cell(n,c)
-            cell.element.set('borderFillIDRef',identifier)
-            for p in cell.paragraphs:
-                p.element.set('paraPrIDRef',paras['cell_text' if c==0 else 'cell'])
+    for cell in table.element.findall('.//'+HP+'tc'):
+        cell.set('borderFillIDRef',identifier)
+
+
+def _compact_choices(doc, choices, chars, paras):
+    labels=[m+' '+c for m,c in zip(CIRCLED,choices,strict=True)]
+    # Conservative width estimate, followed by inspection of the actual Hancom PDF.
+    widths=[sum(2 if unicodedata.east_asian_width(c) in 'WFA' else 1 for c in s)
+            * BODY_SIZE / 2 + 8 for s in labels]
+    if any('\n' in c for c in choices) or sum(widths)>COLUMN_MM*72/25.4:
+        return False
+    table=_table(doc,[labels],chars,paras,width_mm=COLUMN_MM)
+    table.set_column_widths(widths)
+    table.paragraph.element.set('paraPrIDRef',paras['last'])
+    _borderless(doc,table)
+    for cell in table.element.findall('.//'+HP+'tc'):
+        for run in cell.findall('.//'+HP+'run'):
+            run.set('charPrIDRef',chars['body'])
     return True
 
 
@@ -310,7 +339,8 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
                 _material_frame(doc,list(section)[first_material:],chars,paras)
         if unified:
             _material_frame(doc,list(section)[combined_start:],chars,paras)
-        if _paired_choices(doc,sv['choices'],chars,paras):
+        if (_paired_choices(doc,sv['choices'],chars,paras,sv['conditions'])
+            or _compact_choices(doc,sv['choices'],chars,paras)):
             continue
         for n,choice in enumerate(sv['choices']):
             doc.add_paragraph(CIRCLED[n]+' '+choice,

@@ -1,3 +1,4 @@
+import os
 import copy
 import json
 import subprocess
@@ -13,7 +14,7 @@ from test_visuals import validate_visual_artifacts
 
 
 ROOT = Path(__file__).parents[1]
-BUNDLES = ROOT.parent / 'outputs' / 'social-language-20260908'
+BUNDLES = Path(os.environ.get('PRESS_INPUT_ROOT', ROOT.parent / 'outputs' / 'social-language-20260908'))
 NS = {'s': 'http://www.w3.org/2000/svg'}
 
 

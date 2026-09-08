@@ -1,3 +1,4 @@
+import os
 import copy
 import importlib.util
 import json
@@ -7,8 +8,8 @@ from pathlib import Path
 import pytest
 
 ROOT=Path(__file__).resolve().parents[1]
-FORGE=ROOT.parent/'integrated-social-item-forge'
-INPUT=ROOT.parent/'outputs/social-language-20260908'
+FORGE=Path(os.environ.get('PRESS_FORGE_ROOT', ROOT.parent/'integrated-social-item-forge'))
+INPUT=Path(os.environ.get('PRESS_INPUT_ROOT', ROOT.parent/'outputs/social-language-20260908'))
 
 def api():
     assert importlib.util.find_spec('press_revision') is not None, 'Revision ZIP input adapter is missing'

@@ -1,6 +1,7 @@
 """Mechanical verification is evidence, never a human publication approval."""
 from __future__ import annotations
 import hashlib
+import html
 import io
 import json
 import re
@@ -138,6 +139,120 @@ def has_page_frame(page):
     return horizontal and vertical
 
 
+def item_geometry(packet, pdf):
+    """Locate each complete item in rendered column text; retain glyph coordinates."""
+    columns=[]
+    with fitz.open(pdf) as doc:
+        for pn,page in enumerate(doc,1):
+            groups=[[],[]]
+            for block in page.get_text('rawdict')['blocks']:
+                for line in block.get('lines',[]):
+                    chars=[c for span in line['spans'] for c in span['chars'] if normalized(c['c'])]
+                    x,y,_,_=line['bbox']
+                    groups[int(x>page.rect.width/2-8)].append((y,x,chars))
+            for col,lines in enumerate(groups,1):
+                chars=[c for _,_,row in sorted(lines,key=lambda t:(t[0],t[1])) for c in row]
+                columns.append((pn,col,''.join(normalized(c['c']) for c in chars),chars))
+        found=[]
+        for ix,item in enumerate(packet['items']):
+            stem=normalized(f"{item['number']}. {item['student_view']['prompt']} [{item['points']:g}점]")
+            last=normalized(CIRCLED[4]+item['student_view']['choices'][4])
+            starts=[(pn,col,text,chars,text.index(stem)) for pn,col,text,chars in columns if stem in text]
+            if len(starts)!=1: raise ValueError('ITEM_REVIEW_STEM_LOCATION: '+str(item['number']))
+            pn,col,text,chars,start=starts[0]
+            end=text.find(last,start+len(stem))
+            next_start=len(text)
+            if ix+1<len(packet['items']):
+                following=packet['items'][ix+1]
+                next_stem=normalized(f"{following['number']}. {following['student_view']['prompt']} [{following['points']:g}점]")
+                position=text.find(next_stem,start+len(stem))
+                if position>=0: next_start=position
+            if end<0 or end>=next_start: raise ValueError('ITEM_SPLIT_ACROSS_COLUMNS: '+str(item['number']))
+            rect=fitz.Rect(chars[start]['bbox'])
+            for c in chars[start:end+len(last)]: rect.include_rect(c['bbox'])
+            page=doc[pn-1]
+            for image in page.get_image_info():
+                box=fitz.Rect(image['bbox'])
+                if (1+int(box.x0>page.rect.width/2-8)==col and rect.y0<=box.y0<rect.y1):
+                    rect.include_rect(box)
+            found.append({'number':item['number'],'page':pn,'column':col,
+                          'bbox':list(rect),'height_pt':round(rect.height,2)})
+    return found
+
+
+def build_item_review(packet, pdf, out, *, reference_pdf=None, reference_map=None):
+    """Produce unapproved, PDF-bound question crops and a readable review checklist."""
+    out=Path(out);out.mkdir(parents=True,exist_ok=True)
+    items=item_geometry(packet,pdf)
+    if reference_pdf is not None:
+        if not reference_map or reference_map.get('pdf_sha256')!=sha(reference_pdf):
+            raise ValueError('REFERENCE_PDF_SHA_MISMATCH')
+        refs=reference_map.get('items',[])
+        if sorted(r['number'] for r in refs)!=sorted(i['number'] for i in items):
+            raise ValueError('REFERENCE_ITEM_COVERAGE')
+        by_number={r['number']:r for r in refs}
+        with fitz.open(reference_pdf) as doc:
+            for item in items:
+                ref=by_number[item['number']]
+                if type(ref['page']) is not int or not 1<=ref['page']<=len(doc):
+                    raise ValueError('REFERENCE_PAGE_INVALID')
+                page=doc[ref['page']-1];box=fitz.Rect(ref['bbox'])
+                if box.is_empty or box.is_infinite or not page.rect.contains(box):
+                    raise ValueError('REFERENCE_CROP_INVALID')
+                name=f"reference-{item['number']:02d}.png"
+                page.get_pixmap(matrix=fitz.Matrix(2,2),clip=box,alpha=False).save(out/name)
+                item.update(reference_image=name,reference_number=ref['reference_number'],
+                            reference_page=ref['page'],reference_bbox=list(box))
+    with fitz.open(pdf) as doc:
+        for item in items:
+            page=doc[item['page']-1]
+            bbox=fitz.Rect(item['bbox'])
+            middle=page.rect.width/2-8
+            clip=fitz.Rect(70 if item['column']==1 else middle,
+                           max(0,bbox.y0-8),middle if item['column']==1 else page.rect.width-65,
+                           min(page.rect.height,bbox.y1+8))
+            name=f"Q{item['number']:02d}.png"
+            page.get_pixmap(matrix=fitz.Matrix(2,2),clip=clip,alpha=False).save(out/name)
+            item.update(image=name,status='PENDING',crop_bbox=list(clip))
+    report={'schema_version':'press-item-review-v1','pdf_sha256':sha(pdf),'items':items,
+            'checks':['자료 유형과 비교 기출의 형식','표 제목·단위·줄바꿈','도식 수치·범례',
+                      '선택지 배열·읽기 순서','잘림·겹침·문항 간 여백'],
+            'human_release_approval':None}
+    if reference_pdf is not None: report['reference']=reference_map
+    (out/'items.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    cards=[]
+    for i in items:
+        ref=(f'<section><h3>형식 참조 {html.escape(str(i["reference_number"]))}번</h3>'
+             f'<img src="{i["reference_image"]}" alt="공식 예시문항 형식 참조"></section>') if 'reference_image' in i else ''
+        cards.append(f'<article><h2>{i["number"]}번 · {i["page"]}쪽 {i["column"]}단</h2>'
+            f'<p>검토 대기 · 문항 높이 {i["height_pt"]} pt</p><div class="compare">'+ref+
+            f'<section><h3>Press 수정본</h3><img src="{i["image"]}" alt="{i["number"]}번 전체 문항"></section></div></article>')
+    checks=' / '.join(report['checks'])
+    (out/'index.html').write_text('<!doctype html><html lang="ko"><meta charset="utf-8">'
+        '<title>문항별 지면 검토</title><style>body{max-width:1100px;margin:32px auto;font-family:sans-serif;'
+        'background:#eee}article{background:white;padding:24px;margin:24px 0}img{max-width:100%;'
+        'width:670px}.compare{display:flex;gap:20px}.compare section{flex:1;min-width:0}p{line-height:1.6}'
+        '@media(max-width:700px){.compare{display:block}}</style><h1>문항별 지면 검토</h1><p>'+html.escape(checks)+
+        '</p><p>자동 생성된 검토 자료입니다. 문항별 형식 검토와 최종 출고 승인은 별도입니다.</p>'+''.join(cards)+'</html>',encoding='utf-8')
+    return report
+
+
+def balance_last_column(locations):
+    """Move the last of exactly two final-page items only when both occupy the left."""
+    if not locations: return ()
+    last=[i for i in locations if i['page']==locations[-1]['page']]
+    if len(last)==2 and all(i['column']==1 and i['whole_item_same_column'] for i in last):
+        return (last[-1]['number'],)
+    return ()
+
+
+def validate_item_review(packet,pdf,review):
+    if review.get('exam_pdf_sha256')!=sha(pdf):
+        raise ValueError('STALE_ITEM_REVIEW')
+    if review.get('item_numbers_reviewed')!=[i['number'] for i in packet['items']]:
+        raise ValueError('INCOMPLETE_ITEM_REVIEW')
+
+
 def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
     items=[i for i in packet['items'] if item_numbers is None or i['number'] in item_numbers]
     display=visual_result.get('display',{})
@@ -216,9 +331,18 @@ def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
                     if fig['item']==item['number'] and fig['matches'] and (fig['matches'][0]['page'],fig['matches'][0]['column'])!=(pn,col+1):
                         errors.append('PDF_FIGURE_WRONG_ITEM_COLUMN: '+item['item_id'])
                 last=normalized(CIRCLED[4]+' '+item['student_view']['choices'][4])
-                end=[(p,c) for p,c,v in columns if last in v]
+                column_text=next(v for p,c,v in columns if (p,c)==(pn,col))
+                following=items[ix+1] if ix+1<len(items) else None
+                next_prompt=normalized(f"{following['number']}. "+following['student_view']['prompt']) if following else ''
+                try:
+                    item_frame(item,column_text,following if next_prompt and next_prompt in column_text else None)
+                    same_column=True
+                except ValueError:
+                    same_column=False
+                if not same_column:
+                    errors.append('ITEM_SPLIT_ACROSS_COLUMNS: '+str(item['number']))
                 locations.append({'number':item['number'],'page':pn,'column':col+1,
-                                  'whole_item_same_column':(pn,col) in end})
+                                  'whole_item_same_column':same_column})
             for field in ('rationale',):
                 teacher=item.get('teacher',{}).get(field,'')
                 if teacher and normalized(teacher) in normalized(text):

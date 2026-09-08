@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import zipfile
 import xml.etree.ElementTree as ET
@@ -68,13 +69,14 @@ def test_revision_edition_is_visible_in_output(tmp_path):
     with zipfile.ZipFile(out) as z:
         assert '표현교정 r7' in z.read('Contents/section0.xml').decode('utf-8')
 
+@pytest.mark.integration
 def test_additive_figure_insertion_keeps_native_source(tmp_path):
     import json
     import copy
     from press_contract import load_packet
     from press_visuals import build_visuals
     from press_verify import sha,validate_visual_result
-    forge=Path(__file__).resolve().parents[2]/'integrated-social-item-forge'
+    forge=Path(os.environ.get('PRESS_FORGE_ROOT', Path(__file__).resolve().parents[2]/'integrated-social-item-forge'))
     data=load_packet(forge,'FRG-SOC-2028-M01')
     figures=tmp_path/'figures'
     result=build_visuals(data['visual_handoff'],figures,'a'*40)
