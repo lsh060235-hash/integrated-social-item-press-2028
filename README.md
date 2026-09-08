@@ -1,6 +1,6 @@
-# Integrated Social Item Press 2028 v0.2
+# Integrated Social Item Press 2028 v0.3
 
-통합사회 Forge의 검토 ZIP을 편집 가능한 HWPX와 한글에서 실제 변환한 PDF로 제작한다. 입력의 조건부 의견과 미승인 상태를 보존한다. 문항 출제·내용 수정·최종 출고 승인은 Forge와 사람의 영역이다.
+통합사회 Forge의 검토 ZIP을 편집 가능한 HWPX와 한글에서 실제 변환한 PDF로 제작한다. 입력의 조건부 의견과 미승인 상태를 보존한다. 문항 출제·정답 변경·최종 출고 승인은 Forge와 사람의 영역이다. 사용자가 요청한 해설 윤문은 원문 해시에 연결한 별도 교정본으로 적용한다.
 
 ## 설치와 테스트
 
@@ -49,13 +49,15 @@ python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-r
 ## 출력과 검토
 
 - student/exam.hwpx, exam.pdf: 학생용. 본문·표는 네이티브 편집 가능, 도식은 PNG이며 SVG/명세로 재생성한다.
-- teacher/solutions.hwpx, solutions.pdf, answer-key.txt: 원문 정답·해설·풀이·선택지 설명.
+- teacher/solutions.hwpx, solutions.pdf, answer-key.txt: 정답·해설. 기본은 원문이며 `--solution-overlay`를 지정하면 주제·정답 해설·오답피하기로 교정한 해설을 출력한다.
 - preview: 학생용·교사용·파일럿 전쪽 미리보기.
 - item-review/index.html, items.json: 문항별 검토 이미지와 PDF 연결 정보. 자동 상태는 PENDING이다.
 - verification.json: 원문 누락·선택지 순서·문항 분할·도식·폰트 검사, 실제 쪽수, 마지막 단 조정, 긴 문항 목록.
 - runtime.json, reproduction: Python/패키지/글꼴 해시, 실제 Forge 소스·스키마·변경 상태, Press 코드 사본.
 
 원본 ZIP과 input-packet.json에도 교사용 정보가 있다. 학생에게는 student 폴더만 배포한다. 약 6쪽을 목표로 하되 원문 보존·가독성을 우선한다. 긴 조건을 자동 삭제·축약하지 않는다.
+
+해설 교정의 EBSi 참고 자료, 어투·서술 기준, JSON 구조와 검증 범위는 [SOLUTION_STYLE.md](docs/SOLUTION_STYLE.md)를 따른다. 교정본은 전체 회차·판본·문항 해시와 정답이 일치해야 한다. 원본 교사용 근거는 보존하고 교정 JSON을 출력에 함께 보관한다.
 
 실제 학생용·교사용 PDF 전쪽과 전체 문항을 확인한 뒤 agent-page-review.json에 아래 필드를 기록한다. 숫자 목록은 실제 확인한 **전체 페이지/문항**으로 채운다. 미완성 목록은 봉인할 수 없다.
 

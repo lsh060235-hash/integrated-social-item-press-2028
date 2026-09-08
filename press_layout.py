@@ -274,12 +274,18 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
     edition=re.sub(r'FRG-SOC-2028-M0([12])',r'제\1회',packet.get('edition_label',packet['campaign_id']))
     doc.add_paragraph(f"{edition}   |   {len(items)}문항 · {sum(i['points'] for i in items):g}점   |   편집 검토 초안",
         para_pr_id_ref=paras['title'],char_pr_id_ref=chars['small'])
+    if teacher and any('editorial_solution' in i for i in items):
+        solution_label=doc.ensure_run_style(font=FONT,size=BODY_SIZE,bold=True)
+        for offset in range(0,len(items),10):
+            key='    '.join(f"{i['number']:02d}. {CIRCLED[i['teacher']['answer']-1]}" for i in items[offset:offset+10])
+            doc.add_paragraph(key,para_pr_id_ref=paras['title'],char_pr_id_ref=chars['small'])
     if not teacher:
         identity=doc.add_paragraph('성명 ____________________     수험 번호 ____________________',
             para_pr_id_ref=paras['title'],char_pr_id_ref=chars['data'])
         _first_page_rule(doc,identity,header)
     start=doc.add_paragraph('',para_pr_id_ref=paras['spacer'],char_pr_id_ref=chars['small'])
-    doc.set_columns(2,col_type='NEWSPAPER',same_gap=round(11*UNIT),
+    col_type='BALANCED_NEWSPAPER' if teacher and any('editorial_solution' in i for i in items) else 'NEWSPAPER'
+    doc.set_columns(2,col_type=col_type,same_gap=round(11*UNIT),
                     separator_type='SOLID',separator_width='0.12 mm',separator_color='#000000',paragraph=start)
     for idx,item in enumerate(items):
         if idx and item['number'] in column_starts:
@@ -287,6 +293,20 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
         sv=item['student_view']
         if teacher:
             t=item['teacher']
+            if 'editorial_solution' in item:
+                e=item['editorial_solution']
+                doc.add_paragraph(f"{item['number']}. {e['topic']}   정답 {CIRCLED[t['answer']-1]}",
+                    para_pr_id_ref=paras['prompt'],char_pr_id_ref=solution_label)
+                for n,text in enumerate(e['explanation']):
+                    p=doc.add_paragraph('',para_pr_id_ref=paras['data'],char_pr_id_ref=chars['body'])
+                    if n==0: p.add_run('정답 해설  ',char_pr_id_ref=solution_label)
+                    p.add_run(text,char_pr_id_ref=chars['body'])
+                doc.add_paragraph('[오답피하기]',para_pr_id_ref=paras['data'],char_pr_id_ref=solution_label)
+                for w in e['wrong_answers']:
+                    doc.add_paragraph(f"{CIRCLED[w['choice']-1]} {w['text']}",
+                        para_pr_id_ref=paras['data'],char_pr_id_ref=chars['body'])
+                doc.add_paragraph('',para_pr_id_ref=paras['last'],char_pr_id_ref=chars['small'])
+                continue
             doc.add_paragraph(f"{item['number']}. 정답 {CIRCLED[t['answer']-1]}  [{item['points']:g}점]",
                 para_pr_id_ref=paras['prompt'],char_pr_id_ref=chars['prompt'])
             doc.add_paragraph(t['rationale'],para_pr_id_ref=paras['data'],char_pr_id_ref=chars['body'])
