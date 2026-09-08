@@ -129,7 +129,7 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
     doc.set_page_number(target='footer',prefix='',suffix='',align='CENTER')
     doc.add_paragraph('2028 통합사회 '+('정답·해설' if teacher else '연습 문제'),
         para_pr_id_ref=paras['title'],char_pr_id_ref=chars['heading'])
-    doc.add_paragraph(f"{packet['campaign_id']}   |   {len(items)}문항 · {sum(i['points'] for i in items):g}점   |   편집 검토 초안",
+    doc.add_paragraph(f"{packet.get('edition_label',packet['campaign_id'])}   |   {len(items)}문항 · {sum(i['points'] for i in items):g}점   |   편집 검토 초안",
         para_pr_id_ref=paras['title'],char_pr_id_ref=chars['small'])
     if not teacher:
         doc.add_paragraph('성명 ____________________     수험 번호 ____________________',
@@ -159,6 +159,7 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
             key=item['item_id']+'|'+condition['condition_id']
             graphic=(visuals or {}).get(key,{})
             replacement=graphic.get('replace_lines',[])
+            insert_before=graphic.get('insert_before_line')
             source_lines=condition['content'].splitlines()
             if any(line not in source_lines for line in replacement):
                 raise ValueError('VISUAL_REPLACEMENT_NOT_IN_SOURCE')
@@ -171,15 +172,21 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
                     else:
                         doc.add_paragraph(data,para_pr_id_ref=paras['data'],char_pr_id_ref=chars['data'])
                 pending.clear()
+            def write_picture():
+                path=Path(artifact_root)/graphic['png_path']
+                width=min(COLUMN_MM,float(graphic['width_mm']))
+                height=float(graphic['height_mm'])*width/float(graphic['width_mm'])
+                doc.add_picture(path.read_bytes(),'png',width_mm=width,height_mm=height,
+                    para_pr_id_ref=paras['data'],char_pr_id_ref=chars['data'])
             for line in source_lines:
+                if line==insert_before and not emitted:
+                    write_pending()
+                    write_picture()
+                    emitted=True
                 if line in replacement:
                     if not emitted:
                         write_pending()
-                        path=Path(artifact_root)/graphic['png_path']
-                        width=min(COLUMN_MM,float(graphic['width_mm']))
-                        height=float(graphic['height_mm'])*width/float(graphic['width_mm'])
-                        doc.add_picture(path.read_bytes(),'png',width_mm=width,height_mm=height,
-                            para_pr_id_ref=paras['data'],char_pr_id_ref=chars['data'])
+                        write_picture()
                         emitted=True
                 else:
                     pending.append(line)

@@ -81,6 +81,11 @@ def validate_visual_result(request,result,root):
             raise ValueError('DISPLAY_SOURCE_MISMATCH: '+key)
         if g['replace_lines'] and g['replace_lines']!=spec['core_variables']['lines']:
             raise ValueError('DISPLAY_REPLACEMENT_MISMATCH: '+key)
+        marker=g.get('insert_before_line')
+        if marker is not None or spec.get('insert_before_line') is not None:
+            if (marker!=spec.get('insert_before_line') or marker not in spec['source_content'].splitlines()
+                or g['replace_lines']):
+                raise ValueError('DISPLAY_INSERTION_MISMATCH: '+key)
         if any(g[k]!=spec[k] for k in ('width_mm','height_mm')):
             raise ValueError('DISPLAY_SIZE_MISMATCH: '+key)
     return report
@@ -167,6 +172,7 @@ def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
                 if lines:
                     for kind,data in parse_material('\n'.join(lines)):
                         excluded.extend([data] if kind=='text' else [c for row in data for c in row])
+                if lines or graphic.get('insert_before_line') is not None:
                     if sha(Path(artifact_root)/graphic['png_path']) not in images:
                         errors.append('EMBEDDED_FIGURE_SHA_MISMATCH: '+item['item_id'])
                     matches=match_pdf_figure(doc,Path(artifact_root)/graphic['png_path'])

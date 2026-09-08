@@ -50,6 +50,201 @@ _RULES: dict[tuple[str, str], tuple[str, tuple[int, ...], bool]] = {
     ("FRG-SOC-2028-M01-Q25", "HOUSE-A"): ("table", (1, 2, 3, 4), False),
 }
 
+_REVISION_RULES = dict(_RULES)
+_REVISION_RULES[("FRG-SOC-2028-M01-Q14", "STREET-A")] = ("table", (2, 3, 4, 5, 6), False)
+for _number, _data, _mode, _indices, _replace in (
+    (1, "CASE-B", "table", (1, 2, 3, 4, 5), False),
+    (2, "MAP-A", "revision_watershed", (0,), False),
+    (2, "DATA-B", "table", (1, 2, 3, 4), False),
+    (3, "MAP-A", "revision_culture", (0,), False),
+    (5, "DATA-A", "revision_climate", (1, 2, 3, 4, 5, 6), True),
+    (6, "DATA-A", "table", (0, 1, 2, 3), False),
+    (9, "MAP-A", "revision_transit", (1, 2), False),
+    (10, "ARCHIVE-A", "schematic", (0,), True),
+    (12, "DATA-A", "table", (1, 2, 3, 4), False),
+    (13, "MAP-A", "revision_service", (0, 1), False),
+    (16, "DATA-B", "table", (0, 1, 2, 3), False),
+    (17, "TIME-A", "schematic", (0,), True),
+    (19, "DATA-A", "table", (1, 2, 3, 4, 5), False),
+    (20, "MAP-A", "revision_network", (1,), True),
+    (21, "DATA-A", "table", (1, 2, 3, 4), False),
+    (22, "PLAN-B", "table", (2, 3, 4, 5, 6, 7), False),
+    (23, "MAP-B", "revision_coordinates", (1,), False),
+    (24, "DATA-A", "table", (1, 2, 3, 4), False),
+    (25, "DATA-A", "table", (1, 2, 3, 4), False),
+):
+    _REVISION_RULES[(f"FRG-SOC-2028-M02-Q{_number:02}", _data)] = (_mode, _indices, _replace)
+
+
+def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit: str) -> dict[str, Any]:
+    """Render the revised manuscripts, with prose maps inserted beside native text."""
+    result = _build_visuals(request, out_root, press_commit, _REVISION_RULES)
+    for entry in request["requests"]:
+        pair = entry["item_id"], entry["data_id"]
+        mode, indices, replace = _REVISION_RULES[pair]
+        if mode.startswith("revision_") and not replace:
+            result["display"]["|".join(pair)]["insert_before_line"] = entry["source_content"].splitlines()[indices[0]]
+    return result
+
+
+def _revision_topology(mode: str, lines: list[str]) -> dict[str, Any]:
+    content = "\n".join(lines)
+    if mode == "revision_watershed":
+        match = re.fullmatch(r"가상 유역에서 서쪽 지류는 (.+?)을 지나 (\w)로, 동쪽 지류는 (.+?)를 지나 (\w)로 흐른다. (\w)와 (\w)를 지난 물은 (\w)에서 합류한다.", content)
+        if match is None or match.group(2, 4) != match.group(5, 6):
+            raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: watershed")
+        west, p, east, q, _, _, r = match.groups()
+        return {"type": "watershed", "edges": [[west, p], [east, q], [p, r], [q, r]], "west": west, "east": east, "nodes": [p, q, r]}
+    if mode == "revision_climate":
+        _, rows = _table_rows(lines)
+        return {"type": "seasonal_climate", "periods": rows[0][1:], "series": [{"label": row[0], "values": [int(v) for v in row[1:]]} for row in rows[1:]]}
+    if mode == "revision_network":
+        edges = [[a, b, int(value)] for a, b, value in re.findall(r"([A-Z])—([A-Z]): (\d+)건", content)]
+        if len(edges) != 4:
+            raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: network")
+        return {"type": "international_city_network", "edges": edges}
+    if mode == "revision_coordinates":
+        points = [[name, int(x), int(y)] for name, x, y in re.findall(r"([A-Z])=\((\d+),(\d+)\)", content)]
+        if len(points) != 3:
+            raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: coordinates")
+        return {"type": "coordinate_grid", "points": points}
+    if mode == "revision_transit":
+        before = re.search(r"([A-Z])—([A-Z]) 직행버스 (\d+)분", lines[0])
+        after = re.findall(r"([A-Z])—([A-Z]) (버스|철도) (\d+)분", lines[1])
+        wait = re.search(r"([A-Z])의 환승 대기는 (\d+)분", lines[1])
+        if before is None or len(after) != 2 or wait is None:
+            raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: transit")
+        return {"type": "transit_network", "before": list(before.groups()), "after": [list(edge) for edge in after], "wait": list(wait.groups())}
+    if mode == "revision_service":
+        edges = [[a, b, int(t)] for a, b, t in re.findall(r"([WE])↔(서관|동관) (\d+)분", content)]
+        if len(edges) != 4:
+            raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: service")
+        return {"type": "service_access", "edges": edges}
+    if mode == "revision_culture":
+        # Prose remains native; the figure repeats only explicitly stated relations.
+        if not all(value in content for value in ("P는 해안의 국제 항구", "Q는 내륙의 계절적 범람 하천", "P와 바다 건너 R", "오랜 이주 경로", "Q와 R 사이에는 그 경로가 없다")):
+            raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: culture")
+        return {"type": "culture_location", "connections": [["P", "국제 항구"], ["P", "R", "오랜 이주 경로"]], "unconnected": [["Q", "R"]]}
+    raise VisualBuildError(f"UNSUPPORTED_RENDER_MODE: {mode}")
+
+
+def _arrow_ops(x1, y1, x2, y2):
+    import math
+    angle = math.atan2(y2 - y1, x2 - x1)
+    return [("line", x1, y1, x2, y2, 3)] + [
+        ("line", x2, y2, x2 - 22 * math.cos(angle + delta), y2 - 22 * math.sin(angle + delta), 3)
+        for delta in (-0.45, 0.45)
+    ]
+
+
+def _revision_ops(mode, topology, font):
+    ops = []
+
+    def text(x, y, value, attrs=None):
+        ops.append(("text", x, y, value, attrs or {}))
+
+    def node(x, y, value):
+        width = max(100, font.getlength(value) + 34)
+        ops.append(("rect", x - width / 2, y, x + width / 2, y + 70, 3))
+        text(x - font.getlength(value) / 2, y + 10, value, {"data-node": value})
+
+    if mode == "revision_watershed":
+        p, q, r = topology["nodes"]
+        for x, label, station in [(320, topology["west"], p), (1000, topology["east"], q)]:
+            text(x - 85, 25, "서쪽 지류" if x == 320 else "동쪽 지류")
+            node(x, 105, label)
+            ops.extend(_arrow_ops(x, 175, x, 245))
+            node(x, 245, station)
+            ops.extend(_arrow_ops(x, 315, 660, 435))
+        node(660, 435, r)
+        return 540, ops
+    if mode == "revision_culture":
+        ops.extend([("rect", 40, 40, 790, 495, 2), ("line", 790, 40, 790, 495, 3)])
+        text(60, 50, "같은 국가")
+        text(840, 55, "바다")
+        node(280, 130, "Q")
+        text(75, 220, "내륙 · 계절적 범람 하천")
+        ops.append(("line", 650, 395, 1140, 395, 3))
+        node(650, 360, "P")
+        text(420, 440, "해안 · 국제 항구")
+        node(1140, 360, "R")
+        text(820, 290, "오랜 이주 경로")
+        return 530, ops
+    if mode == "revision_network":
+        positions = {"A": (410, 105), "B": (850, 105), "C": (850, 410), "D": (190, 410)}
+        labels = {("A", "B"): (575, 45), ("A", "C"): (625, 225), ("A", "D"): (170, 235), ("B", "C"): (890, 255)}
+        for a, b, value in topology["edges"]:
+            x1, y1 = positions[a]
+            x2, y2 = positions[b]
+            ops.append(("line", x1, y1 + 35, x2, y2 + 35, 3, {"data-edge": a + "-" + b, "data-value": str(value)}))
+            text(*labels[(a, b)], f"{value}건")
+        for name, (x, y) in positions.items():
+            node(x, y, name)
+        text(375, 515, "그 밖의 협력은 없다.")
+        return 590, ops
+    if mode == "revision_coordinates":
+        origin_x, origin_y, step = 350, 610, 220
+        for index in range(3):
+            ops.append(("line", origin_x, origin_y - index * step, origin_x + 2 * step, origin_y - index * step, 2))
+            ops.append(("line", origin_x + index * step, origin_y, origin_x + index * step, origin_y - 2 * step, 2))
+            text(origin_x + index * step - 12, origin_y + 25, str(index))
+            text(origin_x - 65, origin_y - index * step - 20, str(index))
+        text(495, 50, "북쪽 ↑")
+        text(860, 605, "→ 동쪽")
+        for name, x, y in topology["points"]:
+            px, py = origin_x + x * step, origin_y - y * step
+            ops.append(("fill", px - 7, py - 7, px + 7, py + 7))
+            text(px + 20, py - 62, f"{name}=({x},{y})", {"data-node": name})
+        return 700, ops
+    if mode == "revision_transit":
+        a, c, minutes = topology["before"]
+        text(45, 25, "개편 전")
+        ops.append(("line", 190, 145, 1110, 145, 3))
+        text(485, 75, f"직행버스 {minutes}분")
+        node(190, 110, a)
+        node(1110, 110, c)
+        text(45, 245, "개편 후")
+        for index, (start, end, transport, duration) in enumerate(topology["after"]):
+            x = 190 + index * 460
+            ops.append(("line", x, 390, x + 460, 390, 3))
+            text(x + 90, 310, f"{transport} {duration}분")
+            node(x, 355, start)
+            node(x + 460, 355, end)
+        text(440, 465, f'{topology["wait"][0]} 환승 대기 {topology["wait"][1]}분')
+        return 550, ops
+    if mode == "revision_service":
+        text(160, 20, "서쪽 W구역")
+        text(890, 20, "동쪽 E구역")
+        positions = {"W": (250, 100), "E": (1070, 100), "서관": (250, 450), "동관": (1070, 450)}
+        labels = {("W", "서관"): (100, 270), ("W", "동관"): (475, 185), ("E", "서관"): (780, 145), ("E", "동관"): (1110, 270)}
+        for start, end, duration in topology["edges"]:
+            x1, y1 = positions[start]
+            x2, y2 = positions[end]
+            ops.append(("line", x1, y1 + 35, x2, y2 + 35, 3, {"data-edge": start + "-" + end}))
+            text(*labels[(start, end)], f"{duration}분")
+        for name, (x, y) in positions.items():
+            node(x, y, name)
+        return 575, ops
+    if mode == "revision_climate":
+        panel_width = (_WIDTH - 60) / 2
+        for index, series in enumerate(topology["series"]):
+            x = 30 + (index % 2) * panel_width
+            y = 30 + (index // 2) * 480
+            text(x + 40, y, series["label"] + (" (℃)" if index % 2 == 0 else " (mm)"))
+            baseline = y + 340
+            ops.append(("line", x + 35, baseline, x + panel_width - 15, baseline, 2))
+            scale = 30 if index % 2 == 0 else 300
+            for position, (period, value) in enumerate(zip(topology["periods"], series["values"])):
+                center = x + 92 + position * 140
+                top = baseline - value / scale * 225
+                ops.append(("rect", center - 34, top, center + 34, baseline, 3, {"data-climate-value": str(value), "data-series": series["label"], "data-period": period}))
+                text(center - font.getlength(str(value)) / 2, top - 55, str(value))
+                # Calendar labels wrap without changing their order or adding seasons.
+                for line_number, part in enumerate(_wrap(period, font, 136)):
+                    text(center - font.getlength(part) / 2, baseline + 12 + line_number * 52, part)
+        return 990, ops
+    raise VisualBuildError(f"UNSUPPORTED_RENDER_MODE: {mode}")
+
 
 def _canonical_sha256(value: Any) -> str:
     try:
@@ -196,7 +391,7 @@ def _topology_for(
     return None
 
 
-def _validate_request(request: dict[str, Any], press_commit: str) -> str:
+def _validate_request(request: dict[str, Any], press_commit: str, rules=None) -> str:
     if not re.fullmatch(r"[0-9a-f]{40}", press_commit):
         raise VisualBuildError("PRESS_COMMIT must be a real 40-character git object id")
     if request.get("schema_version") != "integrated-social-visual-handoff-v1":
@@ -210,7 +405,7 @@ def _validate_request(request: dict[str, Any], press_commit: str) -> str:
         if pair in seen:
             raise VisualBuildError("DUPLICATE_VISUAL_REQUEST")
         seen.add(pair)
-        if pair not in _RULES:
+        if pair not in (rules if rules is not None else _RULES):
             raise VisualBuildError(f"UNSUPPORTED_VISUAL_REQUEST: {pair[0]} {pair[1]}")
         content = entry.get("source_content")
         if not isinstance(content, str) or hashlib.sha256(content.encode("utf-8")).hexdigest() != entry.get(
@@ -476,6 +671,8 @@ def _render(
         height, ops = _language_grid_ops(topology or {}, font)
     elif mode == "land_grid":
         height, ops = _land_grid_ops(topology or {})
+    elif mode.startswith("revision_"):
+        height, ops = _revision_ops(mode, topology or {}, font)
     else:
         height, ops = _schematic_ops(lines, font)
 
@@ -485,7 +682,7 @@ def _render(
         if op[0] == "text":
             draw.text((op[1], op[2]), op[3], font=font, fill=0)
         elif op[0] == "rect":
-            draw.rectangle(op[1:5], outline=0, width=op[5])
+            draw.rectangle(op[1:5], fill=255, outline=0, width=op[5])
         elif op[0] == "fill":
             draw.rectangle(op[1:5], fill=0)
         else:
@@ -516,7 +713,7 @@ def _render(
             )
         else:
             svg_ops.append(
-                f'<line x1="{op[1]:.2f}" y1="{op[2]:.2f}" x2="{op[3]:.2f}" y2="{op[4]:.2f}" stroke="black" stroke-width="{op[5]}"/>'
+                f'<line x1="{op[1]:.2f}" y1="{op[2]:.2f}" x2="{op[3]:.2f}" y2="{op[4]:.2f}" stroke="black" stroke-width="{op[5]}"{attributes(op, 6)}/>'
             )
     width_mm = _WIDTH / _DPI * 25.4
     height_mm = height / _DPI * 25.4
@@ -533,8 +730,12 @@ def _render(
 
 def build_visuals(request: dict[str, Any], out_root: Path, press_commit: str) -> dict[str, Any]:
     """Build figure specs, SVG/PNG pairs, a Forge receipt, and layout metadata."""
+    return _build_visuals(request, out_root, press_commit, _RULES)
 
-    request_sha = _validate_request(request, press_commit)
+
+def _build_visuals(request, out_root, press_commit, rules):
+
+    request_sha = _validate_request(request, press_commit, rules)
     root = Path(out_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
     if not root.is_dir():
@@ -551,7 +752,7 @@ def build_visuals(request: dict[str, Any], out_root: Path, press_commit: str) ->
     display: dict[str, dict[str, Any]] = {}
     for entry in request["requests"]:
         pair = entry["item_id"], entry["data_id"]
-        mode, indices, replace = _RULES[pair]
+        mode, indices, replace = rules[pair]
         source_lines = entry["source_content"].splitlines()
         try:
             core_lines = [source_lines[index] for index in indices]
@@ -561,7 +762,8 @@ def build_visuals(request: dict[str, Any], out_root: Path, press_commit: str) ->
         spec_rel = Path("specs") / f"{stem}.json"
         svg_rel = Path("svg") / f"{stem}.svg"
         png_rel = Path("png") / f"{stem}.png"
-        topology = _topology_for(pair, source_lines, core_lines)
+        topology = (_revision_topology(mode, core_lines) if mode.startswith("revision_")
+                    else _topology_for(pair, source_lines, core_lines))
         width_mm, height_mm = _render(
             mode,
             core_lines,
@@ -598,6 +800,8 @@ def build_visuals(request: dict[str, Any], out_root: Path, press_commit: str) ->
             "minimum_font_pt": _FONT_SIZE * 72 / _DPI,
             "color_mode": "black_and_white",
         }
+        if mode.startswith("revision_") and not replace:
+            spec["insert_before_line"] = core_lines[0]
         spec_path = root / spec_rel
         spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         binding = {

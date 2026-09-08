@@ -43,3 +43,39 @@ def test_source_choices_not_silently_truncated(tmp_path):
     data=packet(); data['items'][0]['student_view']['choices'].pop()
     with pytest.raises(ValueError, match='CHOICES'):
         layout.build_hwpx(data,tmp_path/'bad.hwpx')
+
+def test_revision_edition_is_visible_in_output(tmp_path):
+    data=packet(); data['edition_label']='FRG-SOC-M01 · 표현교정 r7'
+    out=tmp_path/'edition.hwpx'; layout.build_hwpx(data,out)
+    with zipfile.ZipFile(out) as z:
+        assert '표현교정 r7' in z.read('Contents/section0.xml').decode('utf-8')
+
+def test_additive_figure_insertion_keeps_native_source(tmp_path):
+    import json
+    import copy
+    from press_contract import load_packet
+    from press_visuals import build_visuals
+    from press_verify import sha,validate_visual_result
+    forge=Path(__file__).resolve().parents[2]/'integrated-social-item-forge'
+    data=load_packet(forge,'FRG-SOC-2028-M01')
+    figures=tmp_path/'figures'
+    result=build_visuals(data['visual_handoff'],figures,'a'*40)
+    key='FRG-SOC-2028-M01-Q02|SCENARIO-A'
+    artifact=result['artifacts'][0]
+    spec_path=figures/artifact['figure_spec_path']
+    spec=json.loads(spec_path.read_text(encoding='utf-8'))
+    line=spec['source_content'].splitlines()[0]
+    spec['insert_before_line']=line
+    spec_path.write_text(json.dumps(spec,ensure_ascii=False),encoding='utf-8')
+    result['receipt']['bindings'][0]['figure_spec_sha256']=sha(spec_path)
+    result['display'][key]['insert_before_line']=line
+    out=tmp_path/'additive.hwpx'
+    layout.build_hwpx(data,out,[2],visuals=result,artifact_root=figures)
+    with zipfile.ZipFile(out) as z:
+        xml=ET.fromstring(z.read('Contents/section0.xml'))
+        assert len(xml.findall('.//hp:pic',NS))==1
+        assert line in ''.join(t.text or '' for t in xml.findall('.//hp:t',NS))
+    changed=copy.deepcopy(result)
+    changed['display'][key]['insert_before_line']='source does not contain this'
+    with pytest.raises(ValueError,match='INSERTION'):
+        validate_visual_result(data['visual_handoff'],changed,figures)
