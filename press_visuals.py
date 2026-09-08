@@ -112,6 +112,10 @@ def compile_visual_plan(request, plan):
         indices=tuple(indices)
         if list(indices)!=sorted(set(indices)):
             raise VisualBuildError('VISUAL_PLAN_LINE_ORDER: '+'|'.join(pair))
+        if figure['replace']:
+            chosen=[source[n] for n in indices]
+            if any(chosen.count(line)!=source.count(line) for line in set(chosen)):
+                raise VisualBuildError('VISUAL_PLAN_PARTIAL_DUPLICATE_REPLACEMENT: '+'|'.join(pair))
         # These renderers encode audited units/topologies, not a generic grammar.
         if figure['mode'] not in {'table','schematic','serif_schematic','bar_matrix','bar_list'}:
             if not any(d['source_content_sha256']==digest and d['mode']==figure['mode']

@@ -207,3 +207,26 @@ def test_reference_comparison_rejects_a_different_pdf(tmp_path):
     reference['pdf_sha256']=verify.sha(pdf)
     report=verify.build_item_review(data,pdf,tmp_path/'good',reference_pdf=pdf,reference_map=reference)
     assert (tmp_path/'good'/report['items'][0]['reference_image']).is_file()
+
+
+def test_partial_replacement_of_a_repeated_source_line_is_rejected():
+    source=request();entry=source['requests'][0]
+    entry['source_content']='Repeated label\nOther\nRepeated label'
+    entry['source_content_sha256']=hashlib.sha256(entry['source_content'].encode()).hexdigest()
+    plan=visuals.make_visual_plan(source)
+    plan['figures'][0].update(mode='schematic',replace=True,
+                            lines=[{'text':'Repeated label','occurrence':1}])
+    with pytest.raises(ValueError,match='PARTIAL_DUPLICATE_REPLACEMENT'):
+        visuals.compile_visual_plan(source,plan)
+
+
+def test_long_header_keeps_the_count_noun_with_its_subject(tmp_path):
+    data=packet()
+    data['items'][0]['student_view']['conditions'][0]['content']='국가 | 전체 취학 아동 수\nA | 30000명'
+    path=layout.build_hwpx(data,tmp_path/'table.hwpx')
+    with zipfile.ZipFile(path) as z:
+        root=ET.fromstring(z.read('Contents/section0.xml'))
+    table=root.find('.//hp:tbl[@rowCnt="2"][@colCnt="2"]',NS)
+    cell=table.find('hp:tr',NS).findall('hp:tc',NS)[1]
+    text=''.join(t.text or '' for t in cell.findall('.//hp:t',NS))
+    assert '아동 수' in text and '전체 취학\n아동 수'==text

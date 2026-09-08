@@ -89,7 +89,7 @@ def _formats(doc):
     return char, para
 
 
-def _table(doc, rows, char, para, width_mm=INNER_MM):
+def _table(doc, rows, char, para, width_mm=INNER_MM, header=True):
     cols = len(rows[0])
     width = round(width_mm * UNIT)
     weights = [max(3, min(28, max(len(row[c]) for row in rows))) for c in range(cols)]
@@ -111,7 +111,13 @@ def _table(doc, rows, char, para, width_mm=INNER_MM):
             cell=table.cell(ri,ci)
             cell.element.set('hasMargin','1')
             # Keep a long unit together on its own header line where the source provides one.
-            shown=re.sub(r'\s*(\([^()]+\))$',r'\n\1',value) if ri==0 and len(value)>10 else value
+            shown=value
+            if header and ri==0 and len(value)>=10:
+                shown=re.sub(r'\s*(\([^()]+\))$',r'\n\1',value)
+                spaces=[i for i,c in enumerate(value) if c==' ']
+                if shown==value and spaces:
+                    split=min(spaces,key=lambda i:abs(i-len(value)/2))
+                    shown=value[:split]+'\n'+value[split+1:]
             cell.set_text(shown)
             cell.set_size(height=int(heights[ri]))
             sub=cell.element.find(HP+'subList')
@@ -157,7 +163,7 @@ def _paired_choices(doc, choices, chars, paras, conditions=()):
         match=re.search(r'선지는 (.+?) / (.+?)에 지급할 총지원량\(단위\)을 나타낸다\.',condition['content'])
         if match: headers=[match[1],'',match[2]];break
     if headers: rows.insert(0,headers)
-    table=_table(doc,rows,chars,paras,width_mm=76)
+    table=_table(doc,rows,chars,paras,width_mm=76,header=bool(headers))
     table.set_column_widths([45,10,45])
     table.paragraph.element.set('paraPrIDRef',paras['last'])
     _borderless(doc, table)
@@ -189,7 +195,7 @@ def _compact_choices(doc, choices, chars, paras):
             * BODY_SIZE / 2 + 8 for s in labels]
     if any('\n' in c for c in choices) or sum(widths)>COLUMN_MM*72/25.4:
         return False
-    table=_table(doc,[labels],chars,paras,width_mm=COLUMN_MM)
+    table=_table(doc,[labels],chars,paras,width_mm=COLUMN_MM,header=False)
     table.set_column_widths(widths)
     table.paragraph.element.set('paraPrIDRef',paras['last'])
     _borderless(doc,table)
