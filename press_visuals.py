@@ -1084,7 +1084,7 @@ def _m03_ops(mode, topology, font):
             text(left,445,'범례:')
             labels=list(dict.fromkeys(cell.split(': ',1)[1] for row in data['rows'] for cell in row))
             for i,label in enumerate(labels):
-                text(left+100+i*250,445,('/// ' if i==0 else '― ')+label)
+                text(left+100+i*250,445,('/// ' if i==0 else '--- ')+label)
         return 530,ops
     if mode in {'revision_commute','revision_population'}:
         a,b=topology['rows'][1][0],topology['rows'][2][0]
