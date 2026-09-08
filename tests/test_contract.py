@@ -1,3 +1,4 @@
+import os
 import copy
 import hashlib
 import json
@@ -11,7 +12,7 @@ from jsonschema import Draft202012Validator
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).parents[1]
-FORGE = ROOT.parent / "integrated-social-item-forge"
+FORGE = Path(os.environ.get("PRESS_FORGE_ROOT", ROOT.parent / "integrated-social-item-forge"))
 sys.path.insert(0, str(FORGE / "src"))
 
 from integrated_social_forge.canonical import canonical_sha256

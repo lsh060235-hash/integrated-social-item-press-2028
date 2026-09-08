@@ -1,45 +1,84 @@
-# Integrated Social Item Press 2028 v0.1
+# Integrated Social Item Press 2028 v0.2
 
-통합사회 Forge의 승인된 FRG-SOC-2028-M01을 편집 가능한 HWPX와 한글에서 실제 변환한 PDF로 제작하는 로컬 초안 제작기이다. 문항 출제 기능은 없다. 기존 과학 Press 1.1의 통합사회 미지원 상태와 Forge 승인 기록을 변경하지 않는다.
+통합사회 Forge의 검토 ZIP을 편집 가능한 HWPX와 한글에서 실제 변환한 PDF로 제작한다. 입력의 조건부 의견과 미승인 상태를 보존한다. 문항 출제·내용 수정·최종 출고 승인은 Forge와 사람의 영역이다.
 
-## 실행
+## 설치와 테스트
 
-Windows, 한컴오피스 한글 COM, `FilePathCheckerModule`, 설치된 함초롬바탕·맑은 고딕 글꼴, 옆 경로의 통합사회 Forge가 필요하다.
+Python 3.13 기준이다. 기본 테스트와 GitHub Actions는 합성 입력만 사용하므로 Forge, 원본 ZIP, 한글 없이 실행할 수 있다.
 
 ```powershell
 python -m pip install -r requirements.txt
-Copy-Item config.example.json config.local.json
-# config.local.json에 읽기 전용 Forge 로컬 경로를 설정한다.
 python -X utf8 -m pytest -q
-python -X utf8 press.py build --config config.local.json --out work/run-001
 ```
 
-새 출력 경로만 받으며 생성 코드가 로컬 Git에 커밋되어야 한다. 원천 PDF/HWPX/폰트/개인 경로/산출물은 Git에 넣지 않는다. 실행은 GitHub 생성·push·PR·merge·출고 승인을 하지 않는다.
-
-`student/exam.hwpx`는 문단·네이티브 표·일부 PNG 도판으로 구성된다. 본문 전체를 페이지 이미지로 붙이지 않는다. 도판 내부 라벨·값은 SVG/명세로 별도 편집·재생성하며, HWPX 안에서 문자가 아닌 그림으로 들어간 영역은 검증 보고서에 구분한다. 표 형태의 자료 8건은 편집성을 위해 네이티브로 조판하고 별도 반환 도판도 제공한다.
-
-`teacher/solutions.hwpx`, `teacher/solutions.pdf`에는 정답·원문 해설·풀이 단계·선택지 설명을 별도로 담는다. 반환 루트의 `input-packet.json`은 교사용 정보를 포함한다. 학생에게 배포할 때는 `student/` 파일만 사용한다.
-
-전체 `preview/exam` 및 `preview/solutions`를 실제 확인한 뒤, `agent-page-review.json`에 검사한 파일 SHA와 페이지 목록을 기록하고 다음으로 봉인한다. 이 기록은 에이전트의 지면 검토 기록이며 사람의 최종 출고 승인이 아니다.
+전체 회귀 테스트에는 Windows 글꼴, Forge와 M01 r7·M02 r1 원본 검토 ZIP이 필요하다. 경로를 생략하면 저장소 옆 `integrated-social-item-forge`, `outputs/social-language-20260908`을 사용한다. 통합 테스트를 요청했는데 입력이 없으면 오류로 종료한다.
 
 ```powershell
-python -X utf8 press.py seal --config config.local.json --out work/run-001
-python -X utf8 press.py verify --out work/run-001
+$env:PRESS_FORGE_ROOT = 'C:/path/to/forge'
+$env:PRESS_INPUT_ROOT = 'C:/path/to/review-bundles'
+python -X utf8 -m pytest --integration -q
 ```
 
-입력 계약은 [CONTRACT.md](docs/CONTRACT.md), 설계/관찰 근거는 [DESIGN.md](docs/DESIGN.md), 실행 기록은 [PLAN.md](docs/PLAN.md)에 있다. v0.1 도판 어댑터는 M01의 실제 18요청만 지원하며 미지원 데이터/다른 구조는 거부한다. 과학의 SCIENCE 역할 또는 ㄱ·ㄴ·ㄷ 전용 문법을 적용하지 않는다.
+## 시험지 제작
 
-## 검증 범위
+실제 PDF 제작에는 Windows, 한컴오피스 한글 COM, FilePathCheckerModule, 함초롬바탕·맑은 고딕·바탕 글꼴이 필요하다. 입력 경로는 자신의 파일로 바꾼다. **제작 코드는 커밋되어 있어야 하며 출력 폴더는 새 경로여야 한다.**
 
-문항별 평가원 형식 대응과 적용 범위는 [KICE_FORMATS.md](docs/KICE_FORMATS.md)에 기록한다. 50문항별 자료 상자·대화·표·지도·흐름·막대그래프·선택지 유형을 구분하고, 별도 검토자의 실제 PDF 검토 후 반복 수정한다. 머리말 구분선도 HWPX 지시 여부와 실제 PDF 출력 여부를 함께 검사한다.
+```powershell
+python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/run-001
+```
 
-사용자가 전달한 표현 교정 검토 ZIP은 별도의 [교정 ZIP 입력 경로](docs/REVISION_INPUT.md)로 제작한다. M01 r7·M02 r1의 조건부 의견과 미승인 상태를 보존하며, 기존 승인본의 영수증을 승계하지 않는다.
+M01 r7·M02 r1의 검토된 도식 설정을 기본 제공한다. 원문 해시가 달라지면 이전 줄 번호를 적용하지 않는다. 새 회차·수정 자료는 설정을 내보내고 mode, lines, replace를 검토한 뒤 제작한다.
 
-현재 승인/검수/Blueprint/ItemSpec의 exact SHA, 누락·중복·선택지 수, 소스/학생 출력 대조, 도판 파일과 삽입 바이트 결합, HWPX 재열기·PDF 변환, 실제 용지 방향, 폰트 임베딩, 문항 위치/읽기 순서, 파일 SHA를 확인한다. 테스트는 stale 원문·승인·검수, 변조/누락 도판, 다른 문항 도판 치환, 경로 이탈, 선택지 누락을 주입한다. 해시 일치는 의미 승인이나 사람 승인이 아니다.
+```powershell
+python -X utf8 press_revision.py plan --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/visual-plan.json
+python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --visual-plan work/visual-plan.json --out work/run-002
+```
 
-## 재사용 출처
+`table`, `schematic`, `serif_schematic`, `bar_matrix`, `bar_list`는 정해진 자료 문법으로 재사용할 수 있다. 지도·기후·흐름 등 전용 도식은 단위·축·관계가 검토된 원문/선택 줄/치환 방식에만 허용한다. 새로운 지도 문법에는 별도 구현과 검토가 필요하다. 같은 원문 줄이 반복되면 `{"text":"원문 줄","occurrence":1}`처럼 0부터 세는 출현 순서를 지정한다. 미지원 자료를 임의 도식으로 대체하지 않는다.
 
-- Forge `campaign_status.build_campaign_status`, `build_visual_handoff`, `validate_visual_artifacts`: 기존 읽기 전용 함수 그대로 호출. 계약 경계 유지.
-- 과학 Press `make_exam_hwpx.py`, `exam_config.py`: python-hwpx 문단·표·단 설정과 package safety 접근 참고. 코드 전체 복제/직접 import 없음.
-- 실제 한글 blank/로컬 제공 양식: native `WIDELY`, width<height가 이 환경의 세로 방향임을 실렌더로 확인. 라이브러리의 PORTRAIT 문자열을 그대로 저장하지 않는다.
-- `python-hwpx` API로 신규 문서 생성. 기존 제공 HWPX의 내용/도판/머리말/바탕쪽은 결과에 복사하지 않음.
+## 문항별 형식 대조
+
+build는 25문항 전체 이미지, PDF 해시, 위치·높이와 검토 항목을 item-review에 만든다. 사용자 보유 공식 예시문항 PDF를 지정하면 문항별 나란히 비교 화면도 만든다.
+
+```powershell
+python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --reference-pdf 'C:/references/official-social-2028.pdf' --out work/run-003
+```
+
+기본 대조표에는 제공된 2028 통합사회 공식 예시문항의 정확한 PDF 해시와 M01·M02 대응 문항/좌표가 있다. 다른 PDF·회차에는 --reference-map으로 같은 구조의 JSON을 지정한다. 원본 PDF와 이미지는 Git에 올리지 않는다. 형식 기준은 [KICE_FORMATS.md](docs/KICE_FORMATS.md)에 있다. 가장 가까운 유형을 비교하며 완전 동일성이나 공식 인증을 뜻하지 않는다.
+
+## 출력과 검토
+
+- student/exam.hwpx, exam.pdf: 학생용. 본문·표는 네이티브 편집 가능, 도식은 PNG이며 SVG/명세로 재생성한다.
+- teacher/solutions.hwpx, solutions.pdf, answer-key.txt: 원문 정답·해설·풀이·선택지 설명.
+- preview: 학생용·교사용·파일럿 전쪽 미리보기.
+- item-review/index.html, items.json: 문항별 검토 이미지와 PDF 연결 정보. 자동 상태는 PENDING이다.
+- verification.json: 원문 누락·선택지 순서·문항 분할·도식·폰트 검사, 실제 쪽수, 마지막 단 조정, 긴 문항 목록.
+- runtime.json, reproduction: Python/패키지/글꼴 해시, 실제 Forge 소스·스키마·변경 상태, Press 코드 사본.
+
+원본 ZIP과 input-packet.json에도 교사용 정보가 있다. 학생에게는 student 폴더만 배포한다. 약 6쪽을 목표로 하되 원문 보존·가독성을 우선한다. 긴 조건을 자동 삭제·축약하지 않는다.
+
+실제 학생용·교사용 PDF 전쪽과 전체 문항을 확인한 뒤 agent-page-review.json에 아래 필드를 기록한다. 숫자 목록은 실제 확인한 **전체 페이지/문항**으로 채운다. 미완성 목록은 봉인할 수 없다.
+
+```json
+{
+  "exam_pdf_sha256": "학생용 PDF SHA-256",
+  "exam_pages_reviewed": [],
+  "solutions_pdf_sha256": "교사용 PDF SHA-256",
+  "solutions_pages_reviewed": [],
+  "item_numbers_reviewed": [],
+  "findings": "검토 결과와 남은 한계"
+}
+```
+
+```powershell
+python -X utf8 press_revision.py seal --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/run-003
+python -X utf8 press_revision.py verify --out work/run-003
+```
+
+봉인은 도식 설정 해시와 PDF/검토 범위를 확인한다. verify는 봉인된 파일 바이트의 무결성 검사이며 내용 정답·시각적 완성도·최종 출고 승인은 별도다. human_release_approval을 자동으로 만들지 않는다.
+
+## 재현과 이전 경로
+
+반환 묶음에는 실행 당시 Forge Python 파일·스키마를 보관한다. 수정된 로컬 소스도 해시와 함께 보관하고 변경 상태를 명시한다. runtime.json의 Press 커밋을 이 Git 저장소에서 체크아웃하고, 묶음의 source-input.zip, visual-plan.json, reproduction/forge를 각각 --archive, --visual-plan, --forge-root로 지정하면 해당 코드/입력을 다시 사용할 수 있다. 같은 Windows/한글/글꼴 환경이 필요하며 다른 환경의 PDF 바이트 동일성을 보장하지 않는다.
+
+이전 승인본 전용 press.py --config 경로는 v0.1 호환용이다. 새 기능은 press_revision.py 경로를 사용한다. [입력 계약](docs/CONTRACT.md), [교정 ZIP 검증](docs/REVISION_INPUT.md)을 참고한다. Forge와 과학 Press는 읽기 전용 참고이며 원본·글꼴·개인 경로·산출물을 Git에 넣지 않는다.

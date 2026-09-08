@@ -1,3 +1,4 @@
+import os
 import json
 from pathlib import Path
 import pytest
@@ -42,11 +43,12 @@ def test_item_frame_checks_marker_order_and_points():
     with pytest.raises(ValueError,match='STEM_POINTS'):
         verify.item_frame(item,actual)
 
+@pytest.mark.integration
 def test_visual_display_cannot_swap_another_items_valid_picture(tmp_path):
     from copy import deepcopy
     from press_contract import load_packet
     from press_visuals import build_visuals
-    forge=Path(__file__).resolve().parents[2]/'integrated-social-item-forge'
+    forge=Path(os.environ.get('PRESS_FORGE_ROOT', Path(__file__).resolve().parents[2]/'integrated-social-item-forge'))
     packet=load_packet(forge,'FRG-SOC-2028-M01')
     result=build_visuals(packet['visual_handoff'],tmp_path,'b'*40)
     verify.validate_visual_result(packet['visual_handoff'],result,tmp_path)

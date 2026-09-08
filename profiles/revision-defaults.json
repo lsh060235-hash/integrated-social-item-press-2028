@@ -1,0 +1,388 @@
+{
+  "figures": {
+    "FRG-SOC-2028-M01-Q02|SCENARIO-A": {
+      "source_content_sha256": "5e87373cc1bf1b6fccd234b5bb55c2b7e7d87ac7bf2b88ae6b85653cb62c7bf9",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q03|DIARY-A": {
+      "source_content_sha256": "456360a6aeb74d7b289597b0d9ec58712a8a2e052d55ab716c2fc37af3d7d7f8",
+      "mode": "serif_schematic",
+      "indices": [
+        1,
+        2
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q05|FLOOD-A": {
+      "source_content_sha256": "2af005139eb8ad64d9fc370f190a7dedd5881ec3d74d98a977d1aef78e6c7132",
+      "mode": "revision_flood",
+      "indices": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q07|FLOW-A": {
+      "source_content_sha256": "a0ff378226d7b9aa2413cfc65b92db8d26e0803243d5cf20033e1d0194544ffb",
+      "mode": "revision_flow",
+      "indices": [
+        1,
+        2
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q08|CULTURE-A": {
+      "source_content_sha256": "b926e96e3fc9abcc169a925cf1339b10c140c42d788ccbb0027f1ef9496d7548",
+      "mode": "north_south_map",
+      "indices": [
+        1
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q09|CRAFT-A": {
+      "source_content_sha256": "94713610460d2ff58afbc01ad14d5ee001591eb27f00d89447a39506db7db2d5",
+      "mode": "vertical_layers",
+      "indices": [
+        1
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q11|LANGUAGE-A": {
+      "source_content_sha256": "6c40fab074f469d6490b900d50b34564cefc1ba5c5d3024aba3a3b5bb4f44cda",
+      "mode": "language_grid",
+      "indices": [
+        1,
+        2,
+        3
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q12|LAND-A": {
+      "source_content_sha256": "1ca5ddfbf67267bb8bfc7eb6378d4e10fdbb8aebd6204fe74b2a2c44c72e12e7",
+      "mode": "land_grid",
+      "indices": [
+        1,
+        2
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q12|MOVE-B": {
+      "source_content_sha256": "042bd1bc33f2791a450155a3796f7e91890daac827474e003ab1c9e0f8b39b97",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q13|WORK-A": {
+      "source_content_sha256": "51b54c6e80d4233126a17e07834a1d8197cceba4c3780a0f391659fda4d97941",
+      "mode": "revision_work_bars",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q14|STREET-A": {
+      "source_content_sha256": "fdd8bf1477de41c14b712915bfdc94fccd87917023c30c52bdfae8cc0d8ac4b5",
+      "mode": "table",
+      "indices": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q16|SHIFT-A": {
+      "source_content_sha256": "9afa21a49d31181a74e2dbc0271ba1a8c32ef9cf4ce225bbd102b80a941e25c1",
+      "mode": "revision_shift",
+      "indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q18|GAP-A": {
+      "source_content_sha256": "8f6cf9c07c0b7c689d7ad0e79a113695afaa9de16fbe49627ca2e89b4911d7fa",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q19|INDEX-B": {
+      "source_content_sha256": "338979bc7bf477537e94a624116651e9d003f419da40deb0c587ff9be6988cec",
+      "mode": "revision_index_bars",
+      "indices": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M01-Q20|ASSET-A": {
+      "source_content_sha256": "2cf050df5140e224a33f749e736c3c98c64cce789314694dae6bd0d433c5b45b",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q21|CHAIN-A": {
+      "source_content_sha256": "4642c493b95d82ad5b5e326ea1615479246671efe1af5a90ecb978fa165a013c",
+      "mode": "table",
+      "indices": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q22|MEDIA-A": {
+      "source_content_sha256": "d56cea31d2b94a73256201123b985053bb5dad11af679d062855e979c857839b",
+      "mode": "schematic",
+      "indices": [
+        0
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M01-Q25|HOUSE-A": {
+      "source_content_sha256": "754190bd376b65ed27af5dd18663c8ad7e4397fcc9a2157d398118dd4a021172",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q01|CASE-B": {
+      "source_content_sha256": "87ab0581a19ba00af76c4348395f5c7010c9e12be16eb53322368f901f692348",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q02|MAP-A": {
+      "source_content_sha256": "e2278474ef64103126229693dc50262e39157be99dc9070f143ab875734e53b5",
+      "mode": "revision_watershed",
+      "indices": [
+        0
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q02|DATA-B": {
+      "source_content_sha256": "d2a280895673806325a7e2c8544dc4a89ad21a4e3e8492c22710ab5560b0a338",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q03|MAP-A": {
+      "source_content_sha256": "135a2b87e399a749bb385f212c2bec990ac024c8087e60094e00e97cf208ea8d",
+      "mode": "revision_culture",
+      "indices": [
+        0
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q05|DATA-A": {
+      "source_content_sha256": "7af22a04b50bc09f65df6a1fe5d15e6186c7103b57d6a32eddde2ede5092e313",
+      "mode": "revision_climate",
+      "indices": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M02-Q06|DATA-A": {
+      "source_content_sha256": "d348c845cd2639c2234244c57428524f2e7f24229f413e454280980a10a89f25",
+      "mode": "table",
+      "indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q09|MAP-A": {
+      "source_content_sha256": "72c15e91ae2cce2e56be5544e6301d6e59c3b10748ea3ac8b81da17a24665c3c",
+      "mode": "revision_transit",
+      "indices": [
+        1,
+        2
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q10|ARCHIVE-A": {
+      "source_content_sha256": "45ff93cd45e58cb717fd63b435a0c2e04daa4c6aaf7d127fb78156ef8bde0c1b",
+      "mode": "schematic",
+      "indices": [
+        0
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M02-Q12|DATA-A": {
+      "source_content_sha256": "12e60ca71f67e373cc023ab5da215e93acf9faad48ed4a8a3701f16bbdbe6e8b",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q13|MAP-A": {
+      "source_content_sha256": "3d916b1070c2512991f22b9ca4f83e2a2e0f7459a30a70bedfe438c6136cae33",
+      "mode": "revision_service",
+      "indices": [
+        0,
+        1
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q16|DATA-B": {
+      "source_content_sha256": "4cd9842e68d89197b18bb56bccb94798cda4889d771a11bc1b8eebf423ff65cc",
+      "mode": "table",
+      "indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q17|TIME-A": {
+      "source_content_sha256": "fbe7b582897aca9177a397649408e720b804ba2b5ba0faeec43587a85581e90b",
+      "mode": "schematic",
+      "indices": [
+        0
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M02-Q19|DATA-A": {
+      "source_content_sha256": "44128c164e93787a87fd5804ae3df06a97a018c3bdcca2a7c8abc5056fbb163b",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q20|MAP-A": {
+      "source_content_sha256": "ce984a42945e058df9362fe57643106cdfa7e0a5358c59b22833f97c1a084ff7",
+      "mode": "revision_network",
+      "indices": [
+        1
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M02-Q21|DATA-A": {
+      "source_content_sha256": "5494e4fc952e18cb2c367e83f4b270be71bee462275bb0fd6d9f8d8434223115",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q22|PLAN-B": {
+      "source_content_sha256": "195f8edba3dcf910189df932a51e586778584c86587c3d4b2e75d77b92e8b568",
+      "mode": "table",
+      "indices": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q23|MAP-B": {
+      "source_content_sha256": "d6f5ea2cc3c3303f0aa0ab07078b35816165b8ec23d9dd3f6782b923dc3a9497",
+      "mode": "revision_coordinates",
+      "indices": [
+        1
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q24|DATA-A": {
+      "source_content_sha256": "67aba644f174786796de04bcea56933f6279ae4b27a72427400ef9602337df15",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M02-Q25|DATA-A": {
+      "source_content_sha256": "09e621846073a351347e6cd6d60edc2291e68483dcc3c3fbe1fd84daaf1ba244",
+      "mode": "table",
+      "indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "replace": false
+    }
+  }
+}

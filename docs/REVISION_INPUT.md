@@ -18,7 +18,7 @@ python -X utf8 press_revision.py build --archive "<첨부 ZIP 절대 경로>" --
 
 `student/`는 문제지, `teacher/`는 정답·해설, `preview/`는 전 페이지 PNG다. 입력 ZIP, 패킷과 teacher/는 정답 정보를 포함하므로 학생 배포는 student/ 파일만 사용한다. 원고의 풀이·선지 설명을 임의로 윤문하지 않는다.
 
-모든 문제지·해설 PNG를 확인한 후 `agent-page-review.json`에 exam_pdf_sha256, exam_pages_reviewed(1부터 마지막까지), solutions_pdf_sha256, solutions_pages_reviewed를 기록하고 아래 명령으로 반환 묶음을 만든다. 검토 기록은 사람이 했다고 표기하지 않는다. 사람의 최종 출고 승인은 별개다.
+모든 문제지·해설 PNG와 문항별 대조 이미지를 확인한 후 `agent-page-review.json`에 exam_pdf_sha256, exam_pages_reviewed(1부터 마지막까지), solutions_pdf_sha256, solutions_pages_reviewed, item_numbers_reviewed(전체 25문항)를 기록하고 아래 명령으로 반환 묶음을 만든다. 검토 기록은 사람이 했다고 표기하지 않는다. 사람의 최종 출고 승인은 별개다.
 
 ```powershell
 python -X utf8 press_revision.py seal --archive "<첨부 ZIP 절대 경로>" --out work/M01-language-r7-new
@@ -26,3 +26,5 @@ python -X utf8 press_revision.py verify --out work/M01-language-r7-new
 ```
 
 반환 명세는 `integrated-social-press-return-v0.1`을 재사용한다. source ZIP 해시·판본·원문 해시·도판과 출력 파일 SHA, 재현용 코드, 검증 결과와 미승인 사항을 포함한다. 입력 검증 통과는 조건부 내용·난도·신규성 판정이나 M02 교육과정 포괄 HOLD를 해소하지 않는다.
+
+v0.2는 `FRG-SOC-2028-M` 뒤 두 자리 이상의 회차 번호를 받는다. 입력 신원·125개 검토 패킷 검증은 동일하다. 새 회차 도식은 `plan`으로 내보낸 원문 해시/정확한 줄 선택 설정으로 전달한다. 전용 지도·기후·흐름 렌더러는 검토된 원문에만 허용한다. 반복된 원문 줄 일부만 그림으로 치환하는 설정은 거부한다. 사용 방법과 검증 범위는 저장소 README를 따른다.

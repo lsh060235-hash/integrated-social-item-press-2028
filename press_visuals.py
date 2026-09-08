@@ -50,49 +50,88 @@ _RULES: dict[tuple[str, str], tuple[str, tuple[int, ...], bool]] = {
     ("FRG-SOC-2028-M01-Q25", "HOUSE-A"): ("table", (1, 2, 3, 4), False),
 }
 
-_REVISION_RULES = dict(_RULES)
-_REVISION_RULES[("FRG-SOC-2028-M01-Q03", "DIARY-A")] = ("serif_schematic", (1, 2), True)
-_REVISION_RULES[("FRG-SOC-2028-M01-Q14", "STREET-A")] = ("table", (2, 3, 4, 5, 6), False)
-for _number, _data, _mode in (
-    (5, "FLOOD-A", "revision_flood"),
-    (7, "FLOW-A", "revision_flow"),
-    (13, "WORK-A", "revision_work_bars"),
-    (16, "SHIFT-A", "revision_shift"),
-    (19, "INDEX-B", "revision_index_bars"),
-):
-    _pair = (f"FRG-SOC-2028-M01-Q{_number:02}", _data)
-    _, _indices, _replace = _REVISION_RULES[_pair]
-    _REVISION_RULES[_pair] = (_mode, _indices, _replace)
-for _number, _data, _mode, _indices, _replace in (
-    (1, "CASE-B", "table", (1, 2, 3, 4, 5), False),
-    (2, "MAP-A", "revision_watershed", (0,), False),
-    (2, "DATA-B", "table", (1, 2, 3, 4), False),
-    (3, "MAP-A", "revision_culture", (0,), False),
-    (5, "DATA-A", "revision_climate", (1, 2, 3, 4, 5, 6), True),
-    (6, "DATA-A", "table", (0, 1, 2, 3), False),
-    (9, "MAP-A", "revision_transit", (1, 2), False),
-    (10, "ARCHIVE-A", "schematic", (0,), True),
-    (12, "DATA-A", "table", (1, 2, 3, 4), False),
-    (13, "MAP-A", "revision_service", (0, 1), False),
-    (16, "DATA-B", "table", (0, 1, 2, 3), False),
-    (17, "TIME-A", "schematic", (0,), True),
-    (19, "DATA-A", "table", (1, 2, 3, 4, 5), False),
-    (20, "MAP-A", "revision_network", (1,), True),
-    (21, "DATA-A", "table", (1, 2, 3, 4), False),
-    (22, "PLAN-B", "table", (2, 3, 4, 5, 6, 7), False),
-    (23, "MAP-B", "revision_coordinates", (1,), False),
-    (24, "DATA-A", "table", (1, 2, 3, 4), False),
-    (25, "DATA-A", "table", (1, 2, 3, 4), False),
-):
-    _REVISION_RULES[(f"FRG-SOC-2028-M02-Q{_number:02}", _data)] = (_mode, _indices, _replace)
+def make_visual_plan(request):
+    """Export editable selectors; default mappings only apply to their exact source."""
+    defaults=json.loads((Path(__file__).parent/'profiles/revision-defaults.json').read_text(encoding='utf-8'))
+    figures=[]
+    for entry in request['requests']:
+        if hashlib.sha256(entry['source_content'].encode('utf-8')).hexdigest()!=entry['source_content_sha256']:
+            raise VisualBuildError('SOURCE_CONTENT_SHA256')
+        if any(not re.fullmatch(r'[A-Za-z0-9_-]+',entry[k]) for k in ('item_id','data_id')):
+            raise VisualBuildError('UNSUPPORTED_VISUAL_REQUEST: unsafe identifier')
+        key=entry['item_id']+'|'+entry['data_id']
+        default=defaults['figures'].get(key,{})
+        matched=default.get('source_content_sha256')==entry['source_content_sha256']
+        lines=entry['source_content'].splitlines()
+        figures.append({'item_id':entry['item_id'],'data_id':entry['data_id'],
+            'source_content_sha256':entry['source_content_sha256'],
+            'mode':default['mode'] if matched else None,
+            'lines':[(lines[n] if lines.count(lines[n])==1 else
+                      {'text':lines[n],'occurrence':lines[:n].count(lines[n])})
+                     for n in default['indices']] if matched else [],
+            'replace':default['replace'] if matched else False})
+    return {'schema_version':'press-visual-plan-v1','figures':figures}
 
 
-def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit: str) -> dict[str, Any]:
+def compile_visual_plan(request, plan):
+    """Resolve exact ordered source lines, rejecting stale, ambiguous or partial plans."""
+    if plan.get('schema_version')!='press-visual-plan-v1':
+        raise VisualBuildError('VISUAL_PLAN_SCHEMA')
+    entries={(e['item_id'],e['data_id']):e for e in request['requests']}
+    figures=plan.get('figures',[])
+    pairs=[(f['item_id'],f['data_id']) for f in figures]
+    if len(set(pairs))!=len(pairs) or set(pairs)!=set(entries):
+        raise VisualBuildError('VISUAL_PLAN_COVERAGE')
+    modes={'table','schematic','serif_schematic','bar_matrix','bar_list',
+           'north_south_map','vertical_layers','language_grid','land_grid',
+           'revision_flood','revision_flow','revision_work_bars','revision_index_bars',
+           'revision_shift','revision_watershed','revision_climate','revision_network',
+           'revision_coordinates','revision_transit','revision_service','revision_culture'}
+    rules={}
+    audited=json.loads((Path(__file__).parent/'profiles/revision-defaults.json').read_text(encoding='utf-8'))['figures'].values()
+    for pair,figure in zip(pairs,figures):
+        entry=entries[pair]
+        digest=hashlib.sha256(entry['source_content'].encode('utf-8')).hexdigest()
+        if figure.get('source_content_sha256')!=digest or entry['source_content_sha256']!=digest:
+            raise VisualBuildError('VISUAL_PLAN_STALE: '+'|'.join(pair))
+        if figure.get('mode') not in modes or type(figure.get('replace')) is not bool:
+            raise VisualBuildError('VISUAL_PLAN_MODE_REQUIRED: '+'|'.join(pair))
+        selected=figure.get('lines',[])
+        source=entry['source_content'].splitlines()
+        indices=[]
+        for selector in selected:
+            text=selector.get('text') if isinstance(selector,dict) else selector
+            matches=[n for n,s in enumerate(source) if s==text]
+            occurrence=selector.get('occurrence') if isinstance(selector,dict) else 0
+            if (not isinstance(text,str) or not text.strip() or not matches
+                or type(occurrence) is not int or not 0<=occurrence<len(matches)
+                or (isinstance(selector,str) and len(matches)!=1)):
+                raise VisualBuildError('VISUAL_PLAN_LINE_MISSING_OR_AMBIGUOUS: '+'|'.join(pair))
+            indices.append(matches[occurrence])
+        if not indices: raise VisualBuildError('VISUAL_PLAN_LINES_REQUIRED')
+        indices=tuple(indices)
+        if list(indices)!=sorted(set(indices)):
+            raise VisualBuildError('VISUAL_PLAN_LINE_ORDER: '+'|'.join(pair))
+        if figure['replace']:
+            chosen=[source[n] for n in indices]
+            if any(chosen.count(line)!=source.count(line) for line in set(chosen)):
+                raise VisualBuildError('VISUAL_PLAN_PARTIAL_DUPLICATE_REPLACEMENT: '+'|'.join(pair))
+        # These renderers encode audited units/topologies, not a generic grammar.
+        if figure['mode'] not in {'table','schematic','serif_schematic','bar_matrix','bar_list'}:
+            if not any(d['source_content_sha256']==digest and d['mode']==figure['mode']
+                       and tuple(d['indices'])==indices and d['replace']==figure['replace'] for d in audited):
+                raise VisualBuildError('VISUAL_PLAN_REQUIRES_AUDITED_SOURCE: '+'|'.join(pair))
+        rules[pair]=(figure['mode'],indices,figure['replace'])
+    return rules
+
+
+def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit: str, plan=None) -> dict[str, Any]:
     """Render the revised manuscripts, with prose maps inserted beside native text."""
-    result = _build_visuals(request, out_root, press_commit, _REVISION_RULES)
+    rules=compile_visual_plan(request,make_visual_plan(request) if plan is None else plan)
+    result = _build_visuals(request, out_root, press_commit, rules)
     for entry in request["requests"]:
         pair = entry["item_id"], entry["data_id"]
-        mode, indices, replace = _REVISION_RULES[pair]
+        mode, indices, replace = rules[pair]
         if mode.startswith("revision_") and not replace:
             result["display"]["|".join(pair)]["insert_before_line"] = entry["source_content"].splitlines()[indices[0]]
     return result
@@ -470,13 +509,13 @@ def _parse_series(mode: str, lines: list[str]) -> list[dict[str, Any]]:
 
 
 def _topology_for(
-    pair: tuple[str, str], source_lines: list[str], core_lines: list[str]
+    mode: str, source_lines: list[str], core_lines: list[str]
 ) -> dict[str, Any] | None:
-    if pair[1] == "CULTURE-A":
+    if mode == "north_south_map":
         match = re.fullmatch(
             r"(북쪽): (.+?\[([^]]+)\]) ━ (남쪽): (.+?\[([^]]+)\])", core_lines[0]
         )
-        legend = re.search(r"━=([^.]*)", source_lines[2])
+        legend = re.search(r"━=([^.]*)", '\n'.join(source_lines))
         if match is None or legend is None:
             raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: CULTURE-A")
         return {
@@ -487,14 +526,14 @@ def _topology_for(
             ],
             "connector": {"symbol": "━", "meaning": legend.group(1)},
         }
-    if pair[1] == "CRAFT-A":
+    if mode == "vertical_layers":
         direction, layer_text = core_lines[0].split(": ", 1)
         return {
             "type": "vertical_layers",
             "direction_label": direction,
             "layers": layer_text.split(" → "),
         }
-    if pair[1] == "LANGUAGE-A":
+    if mode == "language_grid":
         direction = re.fullmatch(r"(서쪽) ← (\[[^]]+\]) (\[[^]]+\]) (\[[^]]+\]) → (동쪽)", core_lines[0])
         if direction is None:
             raise VisualBuildError("MAP_TOPOLOGY_UNREADABLE: LANGUAGE-A")
@@ -508,7 +547,7 @@ def _topology_for(
             "districts": list(direction.groups()[1:4]),
             "layers": layers,
         }
-    if pair[1] == "LAND-A":
+    if mode == "land_grid":
         rows = []
         for line in core_lines:
             label, cells = line.split(":", 1)
@@ -530,6 +569,8 @@ def _validate_request(request: dict[str, Any], press_commit: str, rules=None) ->
     seen: set[tuple[str, str]] = set()
     for entry in entries:
         pair = entry.get("item_id"), entry.get("data_id")
+        if any(not isinstance(s,str) or not re.fullmatch(r'[A-Za-z0-9_-]+',s) for s in pair):
+            raise VisualBuildError('UNSAFE_VISUAL_IDENTIFIER')
         if pair in seen:
             raise VisualBuildError("DUPLICATE_VISUAL_REQUEST")
         seen.add(pair)
@@ -892,7 +933,7 @@ def _build_visuals(request, out_root, press_commit, rules):
         svg_rel = Path("svg") / f"{stem}.svg"
         png_rel = Path("png") / f"{stem}.png"
         topology = (_revision_topology(mode, core_lines) if mode.startswith("revision_")
-                    else _topology_for(pair, source_lines, core_lines))
+                    else _topology_for(mode, source_lines, core_lines))
         figure_font, figure_font_path = font, font_path
         if mode == "serif_schematic":
             figure_font_path = Path("C:/Windows/Fonts/batang.ttc")
