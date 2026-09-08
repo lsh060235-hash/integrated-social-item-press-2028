@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "integrated-social-press-input-v0.1",
+  "title": "Integrated Social Press input v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "campaign_id",
+    "subject",
+    "curriculum_revision",
+    "official_forge_export",
+    "status",
+    "items",
+    "visual_handoff",
+    "binding"
+  ],
+  "properties": {
+    "schema_version": {"const": "integrated-social-press-input-v0.1"},
+    "campaign_id": {"type": "string", "pattern": "^FRG-SOC-[A-Z0-9-]+$"},
+    "subject": {"const": "통합사회"},
+    "curriculum_revision": {"const": "2022"},
+    "official_forge_export": {"const": false},
+    "status": {"type": "object"},
+    "items": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {"$ref": "#/$defs/item"}
+    },
+    "visual_handoff": {
+      "type": "object",
+      "required": ["schema_version", "campaign_id", "subject", "status", "render_owner", "official_press_packet", "items_sha256", "item_specs_sha256", "requests"],
+      "properties": {
+        "schema_version": {"const": "integrated-social-visual-handoff-v1"},
+        "campaign_id": {"type": "string"},
+        "subject": {"const": "통합사회"},
+        "status": {"const": "AWAITING_PRESS_RENDER"},
+        "render_owner": {"const": "PRESS"},
+        "official_press_packet": {"const": false},
+        "items_sha256": {"$ref": "#/$defs/sha256"},
+        "item_specs_sha256": {"$ref": "#/$defs/sha256"},
+        "requests": {"type": "array"}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hash_algorithm", "canonical_artifacts", "campaign_status_sha256", "visual_handoff_sha256", "files"],
+      "properties": {
+        "hash_algorithm": {"const": "SHA-256"},
+        "canonical_artifacts": {"type": "object"},
+        "campaign_status_sha256": {"$ref": "#/$defs/sha256"},
+        "visual_handoff_sha256": {"$ref": "#/$defs/sha256"},
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1},
+              "sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["condition_id", "content"],
+      "properties": {
+        "condition_id": {"type": "string", "minLength": 1},
+        "content": {"type": "string", "minLength": 1}
+      }
+    },
+    "student_view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prompt", "conditions", "choices"],
+      "properties": {
+        "prompt": {"type": "string", "minLength": 1},
+        "conditions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/condition"}},
+        "choices": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "solution_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "operation", "used_condition_ids"],
+      "properties": {
+        "step": {"type": "integer", "minimum": 1},
+        "operation": {"type": "string", "minLength": 1},
+        "used_condition_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "choice_evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["choice", "is_correct", "refutation"],
+      "properties": {
+        "choice": {"type": "integer", "minimum": 1, "maximum": 5},
+        "is_correct": {"type": "boolean"},
+        "refutation": {"type": ["string", "null"]}
+      }
+    },
+    "teacher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["answer", "rationale", "solution_steps", "choice_evaluations"],
+      "properties": {
+        "answer": {"type": "integer", "minimum": 1, "maximum": 5},
+        "rationale": {"type": "string", "minLength": 1},
+        "solution_steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/solution_step"}},
+        "choice_evaluations": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/choice_evaluation"}}
+      }
+    },
+    "material": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data_id", "kind", "source_ref", "as_of", "unit"],
+      "properties": {
+        "data_id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "as_of": {"type": "string", "minLength": 1},
+        "unit": {"type": "string", "minLength": 1}
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "points", "item_id", "source_item_sha256", "item_revision", "student_view", "teacher", "materials", "core_data_relations"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1, "maximum": 25},
+        "points": {"type": "number", "exclusiveMinimum": 0},
+        "item_id": {"type": "string", "pattern": "^FRG-SOC-[A-Z0-9-]+-Q[0-9]{2}$"},
+        "source_item_sha256": {"$ref": "#/$defs/sha256"},
+        "item_revision": {"type": ["string", "integer"], "minLength": 1},
+        "student_view": {"$ref": "#/$defs/student_view"},
+        "teacher": {"$ref": "#/$defs/teacher"},
+        "materials": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/material"}},
+        "core_data_relations": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}
