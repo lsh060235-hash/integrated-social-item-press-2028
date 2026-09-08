@@ -1143,7 +1143,7 @@ def _m03_ops(mode, topology, font):
         return y,ops
     if mode=='revision_temperature':
         rows=topology['rows']; values=topology['values'][0]
-        text(35,20,'월평균 기온 (℃)')
+        text(35,20,'현재 월평균 기온 (℃)')
         x0,y0=160,410
         ops.append(('line',x0,90,x0,y0,3))
         ops.append(('line',x0,y0,1240,y0,3))

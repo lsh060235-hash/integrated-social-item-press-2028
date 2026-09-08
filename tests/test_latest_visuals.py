@@ -37,3 +37,10 @@ def test_signed_bar_uses_font_supported_negative_sign():
     bars=[op for op in ops if op[0]=='rect']
     assert bars[1][1]<bars[0][1]==bars[1][3]
     assert (bars[0][3]-bars[0][1])/(bars[1][3]-bars[1][1])==pytest.approx(35/14)
+
+
+def test_temperature_chart_keeps_present_baseline_distinct_from_future_scenario():
+    from PIL import ImageFont
+    topology={'rows':[['month','1','2'],['current','11','13']], 'values':[[11,13]]}
+    _,ops=v._m03_ops('revision_temperature',topology,ImageFont.load_default())
+    assert any(op[0]=='text' and '현재' in op[3] for op in ops)
