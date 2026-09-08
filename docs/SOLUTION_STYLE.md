@@ -65,6 +65,8 @@
 
 build는 원본을 변형하지 않고 교사용 출력 사본에만 교정문을 붙인다. 적용한 JSON을 `solution-editorial.json`으로 출력에 보존하고 SHA-256을 `verification.json`에 기록한다. seal은 교정본 변경 여부, 원문과의 연결, 정답·오답 번호와 PDF의 교정문 누락을 다시 검사한다. 자동 검사는 논리적 동치나 좋은 문체를 보증하지 않으므로 문항별 원문 대조 및 최종 PDF 전쪽 검토가 필요하다.
 
+v0.4에서는 제목·정답 해설·네 개의 번호별 오답 설명이 PDF의 같은 쪽·단에 모여 있는지도 검사한다. 한글의 마지막 쪽 배분이 문항 해설을 나누면 자동 배분을 해제해 다시 렌더링하고 재검사한다. 마지막 쪽에 한 문항만 남으면 한 단의 완결성을 우선하며, 이 조정은 `verification.json`에 남긴다.
+
 ```powershell
 python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --solution-overlay 'C:/input/solution-editorial.json' --out work/edited-001
 ```

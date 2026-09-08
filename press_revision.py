@@ -221,7 +221,16 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
             visuals=None if teacher else result,artifact_root=out/'figures')
         render[group]=render_hangul(hwpx,pdf)
         if teacher:
-            verify_solutions(teacher_packet,pdf)
+            try:
+                verify_solutions(teacher_packet,pdf)
+            except ContractError as error:
+                if not str(error).startswith('SOLUTION_ITEM_SPLIT'):
+                    raise
+                # A single final explanation takes priority over balanced column heights.
+                build_hwpx(teacher_packet,hwpx,teacher=True,balance_solution_columns=False)
+                render[group]=render_hangul(hwpx,pdf)
+                verify_solutions(teacher_packet,pdf)
+                adjustments.append({'reason':'solution_final_column_split','balance_solution_columns':False})
         else:
             check=verify_exam(packet,hwpx,pdf,result,out/'figures',numbers)
             if check['mechanical_status']!='PASS': raise ContractError('RENDER_VERIFICATION_FAILED: '+repr(check['errors']))
