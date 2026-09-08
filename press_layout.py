@@ -19,11 +19,12 @@ COLUMN_MM = 112
 MATERIAL_MM = 109
 INNER_MM = 105.8
 CIRCLED = '①②③④⑤'
-# Item-specific grouping from the 50-item reference comparison. Dialogue versus
+# Item-specific grouping from the source/reference comparison. Dialogue versus
 # independent case/rule stays in separate cards; related data/notes share a card.
 UNIFIED_MATERIAL = {
     'M01': {2,3,4,5,8,9,11,12,14,15,18,19,20,21,22,25},
     'M02': {2,6,7,8,9,10,11,12,17,18,19,20,21,23,24,25},
+    'M03': {3,5,6,9,12,13,19,21,22,23,24,25},
 }
 
 
@@ -246,7 +247,7 @@ def _first_page_rule(doc, identity_paragraph, header):
 
 
 def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
-               artifact_root=None, column_starts=(), teacher=False) -> Path:
+               artifact_root=None, column_starts=(), teacher=False, balance_solution_columns=True) -> Path:
     items=[i for i in packet['items'] if item_numbers is None or i['number'] in item_numbers]
     if visuals:
         from press_verify import validate_visual_result
@@ -284,7 +285,8 @@ def build_hwpx(packet: dict, output: Path, item_numbers=None, *, visuals=None,
             para_pr_id_ref=paras['title'],char_pr_id_ref=chars['data'])
         _first_page_rule(doc,identity,header)
     start=doc.add_paragraph('',para_pr_id_ref=paras['spacer'],char_pr_id_ref=chars['small'])
-    col_type='BALANCED_NEWSPAPER' if teacher and any('editorial_solution' in i for i in items) else 'NEWSPAPER'
+    col_type=('BALANCED_NEWSPAPER' if teacher and balance_solution_columns
+              and any('editorial_solution' in i for i in items) else 'NEWSPAPER')
     doc.set_columns(2,col_type=col_type,same_gap=round(11*UNIT),
                     separator_type='SOLID',separator_width='0.12 mm',separator_color='#000000',paragraph=start)
     for idx,item in enumerate(items):

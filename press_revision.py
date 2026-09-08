@@ -46,13 +46,18 @@ def read_archive(archive):
             if any(c in n for c in ('\\',':','\x00')) or any(p in ('','..','.') for p in n.split('/')):
                 raise ContractError('UNSAFE_ZIP_MEMBER')
         members={n:z.read(n) for n in names}
-    manifest=json.loads(members['delivery_manifest.json'])
-    entries=manifest['files']
-    if len(entries)!=len({f['path'] for f in entries}) or {f['path'] for f in entries}|{'delivery_manifest.json'}!=set(names):
+    manifests=set(members)&{'delivery_manifest.json','FILE_MANIFEST.json'}
+    if len(manifests)!=1: raise ContractError('AMBIGUOUS_OR_MISSING_MANIFEST')
+    manifest_name=manifests.pop()
+    manifest=json.loads(members[manifest_name])
+    entries=([{'path':n,'sha256':digest} for n,digest in manifest.items()]
+             if manifest_name=='FILE_MANIFEST.json' else manifest['files'])
+    if len(entries)!=len({f['path'] for f in entries}) or {f['path'] for f in entries}|{manifest_name}!=set(names):
         raise ContractError('MEMBER_COVERAGE_MISMATCH')
     for f in entries:
         data=members[f['path']]
-        if hashlib.sha256(data).hexdigest()!=f['sha256'] or len(data)!=f['size']:
+        if (hashlib.sha256(data).hexdigest()!=f['sha256'] or
+            (manifest_name=='delivery_manifest.json' and len(data)!=f.get('size'))):
             raise ContractError('MEMBER_HASH_MISMATCH: '+f['path'])
     return members
 
@@ -63,7 +68,15 @@ def load_revision(archive,forge_root):
     from integrated_social_forge.review_collection import collect_review_results
     members=read_archive(archive)
     def get(name): return json.loads(members[name])
-    delivery=get('delivery_manifest.json')
+    aggregate='FILE_MANIFEST.json' in members
+    if aggregate:
+        status=get('DELIVERY_STATUS.json')
+        delivery={'campaign_id':status['campaign_id'],
+            'version':status['source_folder'].rsplit('/',1)[-1],
+            'status':status['review_collection_status'],
+            'human_approval':status['human_approval'],'blueprint_issue':status['blueprint_issue']}
+    else:
+        delivery=get('delivery_manifest.json')
     items,specs,blueprint=[get(n+'.json') for n in ('items','item_specs','blueprint')]
     campaign=delivery['campaign_id']
     if (not re.fullmatch(r'FRG-SOC-2028-M\d{2,}',campaign) or blueprint['campaign_id']!=campaign
@@ -72,28 +85,49 @@ def load_revision(archive,forge_root):
         or sum(p['points'] for p in blueprint['items'])!=50):
         raise ContractError('REVISION_IDENTITY_MISMATCH')
     canonical={n+'_sha256':canonical_sha256(v) for n,v in [('items',items),('item_specs',specs),('blueprint',blueprint)]}
-    check=get('production_check.json')
-    pm=get('reviews/packets/manifest.json')
-    if (delivery['items_canonical_sha256']!=canonical['items_sha256']
-        or any(check[k]!=v for k,v in canonical.items())
-        or pm['source_items_sha256']!=canonical['items_sha256']
-        or pm['source_item_specs_sha256']!=canonical['item_specs_sha256']):
-        raise ContractError('SOURCE_HASH_MISMATCH')
-    current=build_review_packets(items,campaign_id=campaign,item_specs=specs,review_profile=pm.get('review_profile'))
-    expected={f['file']:f for f in pm['packets']}
-    if len(expected)!=125 or pm['packet_count']!=125:
-        raise ContractError('REVIEW_COVERAGE_MISMATCH')
-    reviews=[]
-    for packet in current:
-        relative=packet['item_id'][-3:]+'/'+packet['role']+'.json'
-        saved=get('reviews/packets/'+relative)
-        if saved!=packet or expected[relative]['packet_sha256']!=canonical_sha256(packet):
-            raise ContractError('REVIEW_PACKET_MISMATCH: '+relative)
-        reviews.append(get('reviews/results/'+relative))
+    if aggregate:
+        # DELIVERY_STATUS is current; production_check can be a historical author snapshot.
+        if any(status[k]!=v for k,v in canonical.items()):
+            raise ContractError('SOURCE_HASH_MISMATCH')
+        if status['item_count']!=25 or status['total_points']!=50:
+            raise ContractError('REVISION_IDENTITY_MISMATCH')
+        current=build_review_packets(items,campaign_id=campaign,item_specs=specs,
+                                     review_profile=status['review_profile'])
+        saved=get('reviews/review_packets.json')
+        if len(saved)!=125 or saved!=current or canonical_sha256(saved)!=status['review_packets_sha256']:
+            raise ContractError('REVIEW_PACKET_MISMATCH')
+        reviews=get('reviews/review_results.json')
+    else:
+        check=get('production_check.json')
+        pm=get('reviews/packets/manifest.json')
+        if (delivery['items_canonical_sha256']!=canonical['items_sha256']
+            or any(check[k]!=v for k,v in canonical.items())
+            or pm['source_items_sha256']!=canonical['items_sha256']
+            or pm['source_item_specs_sha256']!=canonical['item_specs_sha256']):
+            raise ContractError('SOURCE_HASH_MISMATCH')
+        current=build_review_packets(items,campaign_id=campaign,item_specs=specs,review_profile=pm.get('review_profile'))
+        expected={f['file']:f for f in pm['packets']}
+        if len(expected)!=125 or pm['packet_count']!=125:
+            raise ContractError('REVIEW_COVERAGE_MISMATCH')
+        reviews=[]
+        for packet in current:
+            relative=packet['item_id'][-3:]+'/'+packet['role']+'.json'
+            saved=get('reviews/packets/'+relative)
+            if saved!=packet or expected[relative]['packet_sha256']!=canonical_sha256(packet):
+                raise ContractError('REVIEW_PACKET_MISMATCH: '+relative)
+            reviews.append(get('reviews/results/'+relative))
     collection=collect_review_results(items,reviews,current)
     if collection['errors'] or collection!=get('reviews/collection_report.json'):
         raise ContractError('REVIEW_COLLECTION_MISMATCH')
     conditional=sum(i['state']=='NEEDS_ADJUDICATION' for i in collection['items'])
+    if aggregate:
+        from collections import Counter
+        verdicts={role:dict(Counter(i['verdicts'][role] for i in collection['items']))
+                  for role in ('SOLVE_A','SOLVE_B','CONTENT','DIFFICULTY','NOVELTY')}
+        passed=[i['item_id'] for i in collection['items'] if all(v=='PASS' for v in i['verdicts'].values())]
+        if status['role_verdicts']!=verdicts or status['all_roles_pass_items']!=passed:
+            raise ContractError('REVIEW_STATUS_MISMATCH')
+        delivery['conditional_items']=conditional
     if (delivery['status']!=collection['status'] or delivery['conditional_items']!=conditional
         or collection['status'] not in ('NEEDS_ADJUDICATION','READY_FOR_HUMAN_APPROVAL')):
         raise ContractError('REVIEW_STATUS_MISMATCH')
@@ -116,7 +150,8 @@ def load_revision(archive,forge_root):
     return {'schema_version':'integrated-social-press-revision-input-v0.1',
         'campaign_id':campaign,'subject':'통합사회','curriculum_revision':'2022',
         'source_version':delivery['version'],
-        'edition_label':campaign+' · 표현교정 '+delivery['version'].split('-')[-1],
+        'edition_label':(f"제{int(campaign.rsplit('M',1)[1])}회 · 원고 {delivery['version']}" if aggregate else
+                         campaign+' · 표현교정 '+delivery['version'].split('-')[-1]),
         'official_forge_export':False,'human_release_approval':None,
         'status':{'content_status':collection['status'],'conditional_items':conditional,
             'human_approval':delivery['human_approval'],'blueprint_issue':delivery['blueprint_issue'],
@@ -186,7 +221,16 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
             visuals=None if teacher else result,artifact_root=out/'figures')
         render[group]=render_hangul(hwpx,pdf)
         if teacher:
-            verify_solutions(teacher_packet,pdf)
+            try:
+                verify_solutions(teacher_packet,pdf)
+            except ContractError as error:
+                if not str(error).startswith('SOLUTION_ITEM_SPLIT'):
+                    raise
+                # A single final explanation takes priority over balanced column heights.
+                build_hwpx(teacher_packet,hwpx,teacher=True,balance_solution_columns=False)
+                render[group]=render_hangul(hwpx,pdf)
+                verify_solutions(teacher_packet,pdf)
+                adjustments.append({'reason':'solution_final_column_split','balance_solution_columns':False})
         else:
             check=verify_exam(packet,hwpx,pdf,result,out/'figures',numbers)
             if check['mechanical_status']!='PASS': raise ContractError('RENDER_VERIFICATION_FAILED: '+repr(check['errors']))

@@ -60,7 +60,7 @@ def make_visual_plan(request):
         if any(not re.fullmatch(r'[A-Za-z0-9_-]+',entry[k]) for k in ('item_id','data_id')):
             raise VisualBuildError('UNSUPPORTED_VISUAL_REQUEST: unsafe identifier')
         key=entry['item_id']+'|'+entry['data_id']
-        default=defaults['figures'].get(key,{})
+        default=defaults['figures'].get(key+'|'+entry['source_content_sha256'], defaults['figures'].get(key,{}))
         matched=default.get('source_content_sha256')==entry['source_content_sha256']
         lines=entry['source_content'].splitlines()
         figures.append({'item_id':entry['item_id'],'data_id':entry['data_id'],
@@ -86,7 +86,10 @@ def compile_visual_plan(request, plan):
            'north_south_map','vertical_layers','language_grid','land_grid',
            'revision_flood','revision_flow','revision_work_bars','revision_index_bars',
            'revision_shift','revision_watershed','revision_climate','revision_network',
-           'revision_coordinates','revision_transit','revision_service','revision_culture'}
+           'revision_coordinates','revision_transit','revision_service','revision_culture',
+           'revision_paired_culture','revision_temperature','revision_commute','revision_border',
+           'revision_region','revision_trade','revision_history','revision_sites',
+           'revision_population','revision_power'}
     rules={}
     audited=json.loads((Path(__file__).parent/'profiles/revision-defaults.json').read_text(encoding='utf-8'))['figures'].values()
     for pair,figure in zip(pairs,figures):
@@ -139,6 +142,8 @@ def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit
 
 def _revision_topology(mode: str, lines: list[str]) -> dict[str, Any]:
     content = "\n".join(lines)
+    if mode in _M03_MODES:
+        return _m03_topology(mode, lines)
     if mode == "revision_flood":
         panels = []
         for group in (lines[:4], lines[4:]):
@@ -208,6 +213,8 @@ def _arrow_ops(x1, y1, x2, y2):
 
 
 def _revision_ops(mode, topology, font):
+    if mode in _M03_MODES:
+        return _m03_ops(mode, topology, font)
     ops = []
 
     def text(x, y, value, attrs=None):
@@ -1012,3 +1019,168 @@ def _build_visuals(request, out_root, press_commit, rules):
         "bindings": bindings,
     }
     return {"receipt": receipt, "artifacts": artifacts, "display": display}
+
+# Source-specific topology renderers remain gated by the audited hash/selector registry.
+_M03_MODES = {'revision_'+name for name in ('paired_culture','temperature','commute',
+    'border','region','trade','history','sites','population','power')}
+
+
+def _m03_topology(mode, lines):
+    content='\n'.join(lines)
+    _, rows=_table_rows(lines)
+    result={'type':mode.removeprefix('revision_')}
+    if mode=='revision_paired_culture':
+        result['panels']=[{'label':lines[0],'rows':rows[:2]}, {'label':lines[4],'rows':rows[2:]}]
+    elif mode in {'revision_temperature','revision_trade','revision_power'}:
+        result['rows']=rows
+        values=[[int(re.search(r'[+−-]?\d+',v).group().replace('−','-')) for v in row[1:]] for row in rows[1:]]
+        result['values']=[r[0] for r in values] if mode=='revision_trade' else values
+    elif mode=='revision_border':
+        result['routes']=[[row[0],row[1],row[2].split('→')] for row in rows[1:]]
+        countries=re.search(r'([A-Z])·([A-Z])는 (\S+), ([A-Z])·([A-Z])는 (\S+)에 속한다',content)
+        a,b,country1,c,d,country2=countries.groups()
+        result['countries']=[[country1,[a,b]],[country2,[c,d]]]
+    elif mode=='revision_sites':
+        result['sites']=rows[1:]
+    elif mode=='revision_history':
+        result['events']=re.split(r' 그러나 ',content)
+        result['years']=[re.search(r'\d{4}년',e).group() for e in result['events']]
+    elif mode=='revision_region':
+        result['regions']=re.findall(r'(북부|남부) ([A-Z])',content)
+        result['source']=content
+    elif mode in {'revision_commute','revision_population'}:
+        result['rows']=rows
+        if mode=='revision_commute':
+            result['flows']=[[rows[1][0],rows[2][0],rows[1][2]], [rows[2][0],rows[1][0],rows[2][2]]]
+        else:
+            result['flows']=[[a,b,n+'명'] for a,b,n in re.findall(r'([A-Z])에서 ([A-Z])로 (\d+)명',content)]
+        if len(result['flows'])!=2:
+            raise VisualBuildError('MAP_TOPOLOGY_UNREADABLE: directional flows')
+    return result
+
+
+def _m03_ops(mode, topology, font):
+    ops=[]
+    def text(x,y,value,attrs=None):
+        ops.append(('text',x,y,value,attrs or {}))
+    def box(x,y,w,h,label):
+        ops.append(('rect',x,y,x+w,y+h,2))
+        for n,part in enumerate(_wrap(label,font,w-30)):
+            text(x+15,y+12+n*58,part)
+    if mode=='revision_paired_culture':
+        for panel,data in enumerate(topology['panels']):
+            left=30+panel*650
+            text(left,20,data['label'])
+            for r,row in enumerate(data['rows']):
+                for c,label in enumerate(row):
+                    x,y=left+c*300,90+r*160
+                    box(x,y,300,160,label)
+                    # Pattern key varies by mapped value, never by an answer pair.
+                    variant=(c if panel==0 else r)
+                    for k in range(10):
+                        px=x+15+k*28
+                        if variant==0: ops.append(('line',px,y+120,px+15,y+100,2))
+                        else: ops.append(('line',px,y+118,px+15,y+118,2))
+            text(left,445,'범례:')
+            labels=list(dict.fromkeys(cell.split(': ',1)[1] for row in data['rows'] for cell in row))
+            for i,label in enumerate(labels):
+                text(left+100+i*250,445,('/// ' if i==0 else '--- ')+label)
+        return 530,ops
+    if mode in {'revision_commute','revision_population'}:
+        a,b=topology['rows'][1][0],topology['rows'][2][0]
+        box(40,80,200,140,a)
+        box(1080,80,200,140,b)
+        for i,(origin,destination,value) in enumerate(topology['flows']):
+            y=100+i*90
+            x1,x2=(260,1060) if origin==a else (1060,260)
+            ops.extend(_arrow_ops(x1,y,x2,y))
+            text(440,y-55,f'{origin} → {destination}: {value}',{'data-directed-flow':origin+'-'+destination})
+        text(40,255,'아침 통근 이동' if mode=='revision_commute' else '도시 안의 인구 이동')
+        return 340,ops
+    if mode=='revision_border':
+        countries=topology['countries']
+        for i,(person,nationality,route) in enumerate(topology['routes']):
+            y=20+i*310
+            text(35,y,f'{person} (국적: {nationality})')
+            for j,(country,places) in enumerate(countries):
+                box(40+j*650,y+70,600,200,country+'  ['+' · '.join(places)+']')
+            ops.append(('line',660,y+65,660,y+270,4))
+            # Each ordered stop is explicit, including the return leg.
+            positions={place:180+j*650+k*250 for j,(_,places) in enumerate(countries) for k,place in enumerate(places)}
+            for step,(a,b) in enumerate(zip(route,route[1:])):
+                yy=y+180+step*55
+                ops.extend(_arrow_ops(positions[a],yy,positions[b],yy))
+                text(min(positions[a],positions[b])+20,yy-48,f'{step+1}: {a} → {b}')
+        return 965,ops
+    if mode=='revision_region':
+        for i,(direction,name) in enumerate(topology['regions']):
+            box(390,30+i*235,540,150,f'{direction} {name}')
+        text(425,110,'교육기관 없음')
+        text(425,345,'교육기관 집중')
+        ops.append(('line',650,185,650,255,2))
+        ops.extend([('line',630,208,670,238,4),('line',670,208,630,238,4)])
+        text(30,205,'교통 여건상 이용 불가')
+        return 460,ops
+    if mode=='revision_sites':
+        groups={}
+        for row in topology['sites']: groups.setdefault(row[1],[]).append(row)
+        for j,(country,sites) in enumerate(groups.items()):
+            left=30+j*650
+            ops.append(('rect',left,20,left+610,520,3))
+            text(left+20,35,country)
+            for i,row in enumerate(sites):
+                box(left+20,110+i*190,570,165,f'{row[0]} · {row[2]} / {row[3]} / {row[4]}')
+        text(30,555,'국가별 묶음 (거리·방향은 나타내지 않음)')
+        return 635,ops
+    if mode=='revision_history':
+        y=30
+        for i,event in enumerate(topology['events']):
+            parts=_wrap(event,font,1190)
+            height=len(parts)*58+30
+            box(50,y,1230,height,event)
+            y+=height+65
+            if i<len(topology['events'])-1: ops.extend(_arrow_ops(660,y-60,660,y-10))
+        return y,ops
+    if mode=='revision_temperature':
+        rows=topology['rows']; values=topology['values'][0]
+        text(35,20,'현재 월평균 기온 (℃)')
+        x0,y0=160,410
+        ops.append(('line',x0,90,x0,y0,3))
+        ops.append(('line',x0,y0,1240,y0,3))
+        for tick in (0,10,20,30):
+            y=y0-tick*10
+            text(70,y-25,str(tick)); ops.append(('line',x0,y,1240,y,1))
+        points=[]
+        for i,(label,value) in enumerate(zip(rows[0][1:],values)):
+            x=250+i*300;y=y0-value*10
+            points.append((x,y));text(x-45,435,label);text(x-30,y-60,str(value))
+        for a,b in zip(points,points[1:]): ops.append(('line',*a,*b,3))
+        for x,y in points: ops.append(('rect',x-6,y-6,x+6,y+6,3))
+        return 515,ops
+    if mode=='revision_trade':
+        text(30,20,'무역 확대 전 대비 (억 원)')
+        zero=850;scale=5
+        ops.append(('line',zero,100,zero,340,3,{'data-zero-axis':'true'}))
+        for i,(row,value) in enumerate(zip(topology['rows'][1:],topology['values'])):
+            y=120+i*115
+            text(30,y,row[0]);end=zero+value*scale
+            ops.append(('rect',min(zero,end),y,max(zero,end),y+65,3,{'data-signed-value':str(value)}))
+            text(end+10 if value>0 else end-100,y,str(value))
+        text(zero-15,365,'0')
+        return 440,ops
+    if mode=='revision_power':
+        text(30,20,'시간대별 전력량 (MWh)')
+        rows=topology['rows'];values=topology['values']
+        for period in range(2):
+            y=100+period*250
+            text(30,y,rows[0][period+1])
+            for series in range(2):
+                yy=y+series*100;value=values[series][period]
+                text(170,yy,rows[series+1][0])
+                ops.append(('rect',520,yy,520+value*8,yy+65,3,{'data-power-value':str(value)}))
+                if series==1:
+                    for x in range(535,520+value*8-10,25): ops.append(('line',x,yy+8,x,yy+57,1))
+                text(540+value*8,yy,str(value))
+        text(500,580,'0');text(760,580,'막대 길이: 같은 척도')
+        return 655,ops
+    raise VisualBuildError('UNSUPPORTED_RENDER_MODE: '+mode)

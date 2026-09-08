@@ -1,4 +1,4 @@
-# Integrated Social Item Press 2028 v0.3
+# Integrated Social Item Press 2028 v0.4
 
 통합사회 Forge의 검토 ZIP을 편집 가능한 HWPX와 한글에서 실제 변환한 PDF로 제작한다. 입력의 조건부 의견과 미승인 상태를 보존한다. 문항 출제·정답 변경·최종 출고 승인은 Forge와 사람의 영역이다. 사용자가 요청한 해설 윤문은 원문 해시에 연결한 별도 교정본으로 적용한다.
 
@@ -12,6 +12,8 @@ python -X utf8 -m pytest -q
 ```
 
 전체 회귀 테스트에는 Windows 글꼴, Forge와 M01 r7·M02 r1 원본 검토 ZIP이 필요하다. 경로를 생략하면 저장소 옆 `integrated-social-item-forge`, `outputs/social-language-20260908`을 사용한다. 통합 테스트를 요청했는데 입력이 없으면 오류로 종료한다.
+
+v0.4의 최신 묶음 테스트에는 M01 language-v2-r1·M02 language-v2-r2·M03 higher-v4 ZIP도 필요하다. 기본 위치는 Forge의 `deliveries/2026-09-08-language-v2`이며 `PRESS_DELIVERY_ROOT`로 바꿀 수 있다. 새 `FILE_MANIFEST.json`/통합 검토 기록과 종전 개별 패킷 형식을 모두 검사한다.
 
 ```powershell
 $env:PRESS_FORGE_ROOT = 'C:/path/to/forge'
@@ -27,7 +29,7 @@ python -X utf8 -m pytest --integration -q
 python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/run-001
 ```
 
-M01 r7·M02 r1의 검토된 도식 설정을 기본 제공한다. 원문 해시가 달라지면 이전 줄 번호를 적용하지 않는다. 새 회차·수정 자료는 설정을 내보내고 mode, lines, replace를 검토한 뒤 제작한다.
+M01 r7·M02 r1 및 최신 M01 language-v2-r1·M02 language-v2-r2·M03 v4의 검토된 도식 설정을 기본 제공한다. 원문 해시가 달라지면 이전 줄 번호를 적용하지 않는다. 새 회차·수정 자료는 설정을 내보내고 mode, lines, replace를 검토한 뒤 제작한다.
 
 ```powershell
 python -X utf8 press_revision.py plan --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/visual-plan.json
@@ -44,7 +46,7 @@ build는 25문항 전체 이미지, PDF 해시, 위치·높이와 검토 항목�
 python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --reference-pdf 'C:/references/official-social-2028.pdf' --out work/run-003
 ```
 
-기본 대조표에는 제공된 2028 통합사회 공식 예시문항의 정확한 PDF 해시와 M01·M02 대응 문항/좌표가 있다. 다른 PDF·회차에는 --reference-map으로 같은 구조의 JSON을 지정한다. 원본 PDF와 이미지는 Git에 올리지 않는다. 형식 기준은 [KICE_FORMATS.md](docs/KICE_FORMATS.md)에 있다. 가장 가까운 유형을 비교하며 완전 동일성이나 공식 인증을 뜻하지 않는다.
+기본 대조표에는 제공된 2028 통합사회 공식 예시문항의 정확한 PDF 해시와 M01·M02·M03 대응 문항/좌표가 있다. 다른 PDF·회차에는 --reference-map으로 같은 구조의 JSON을 지정한다. 원본 PDF와 이미지는 Git에 올리지 않는다. 형식 기준은 [KICE_FORMATS.md](docs/KICE_FORMATS.md)에 있다. 가장 가까운 유형을 비교하며 완전 동일성이나 공식 인증을 뜻하지 않는다.
 
 ## 출력과 검토
 
@@ -84,3 +86,5 @@ python -X utf8 press_revision.py verify --out work/run-003
 반환 묶음에는 실행 당시 Forge Python 파일·스키마를 보관한다. 수정된 로컬 소스도 해시와 함께 보관하고 변경 상태를 명시한다. runtime.json의 Press 커밋을 이 Git 저장소에서 체크아웃하고, 묶음의 source-input.zip, visual-plan.json, reproduction/forge를 각각 --archive, --visual-plan, --forge-root로 지정하면 해당 코드/입력을 다시 사용할 수 있다. 같은 Windows/한글/글꼴 환경이 필요하며 다른 환경의 PDF 바이트 동일성을 보장하지 않는다.
 
 이전 승인본 전용 press.py --config 경로는 v0.1 호환용이다. 새 기능은 press_revision.py 경로를 사용한다. [입력 계약](docs/CONTRACT.md), [교정 ZIP 검증](docs/REVISION_INPUT.md)을 참고한다. Forge와 과학 Press는 읽기 전용 참고이며 원본·글꼴·개인 경로·산출물을 Git에 넣지 않는다.
+
+최신 세 회차의 실제 쪽수, 검증 범위와 한계는 [VALIDATION_V04.md](docs/VALIDATION_V04.md)에 있다.

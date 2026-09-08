@@ -76,3 +76,25 @@ def test_saved_editorial_cannot_change_after_build(tmp_path):
     (tmp_path/'solution-editorial.json').write_text('{"changed":true}')
     with pytest.raises(ValueError, match='SOLUTION_EDITORIAL_CHANGED'):
         verify_saved_plan(tmp_path)
+
+
+@pytest.mark.parametrize('split', [False, True])
+def test_solution_pdf_requires_all_labeled_prose_in_same_column(tmp_path, split):
+    import fitz
+    packet, overlay = fixture()
+    edited = api().apply_editorial(packet, overlay)
+    e = overlay['items'][0]
+    doc = fitz.open()
+    page = doc.new_page(width=600, height=800)
+    lines = [f"1. {e['topic']} 정답 ②", '정답 해설', *e['explanation'], '[오답피하기]']
+    lines += ['①③④⑤'[n]+' '+w['text'] for n,w in enumerate(e['wrong_answers'])]
+    for n, line in enumerate(lines):
+        page.insert_text((340 if split and n >= 4 else 30, 50+n*25), line, fontname='korea', fontsize=9)
+    path = tmp_path/'solutions.pdf'
+    doc.save(path)
+    doc.close()
+    if split:
+        with pytest.raises(ValueError, match='SOLUTION_ITEM_SPLIT'):
+            api().verify_solutions(edited, path)
+    else:
+        api().verify_solutions(edited, path)
