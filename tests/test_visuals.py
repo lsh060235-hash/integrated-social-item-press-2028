@@ -49,7 +49,7 @@ def built(tmp_path_factory):
 def test_builds_exact_visual_specs_and_validated_png_assets(built):
     request, out_root, result = built
 
-    assert set(result) == {"receipt", "artifacts", "display"}
+    assert set(result) == {"receipt", "artifacts", "display", "font_provenance"}
     assert len(result["receipt"]["bindings"]) == 18
     assert len(result["artifacts"]) == 18
     assert len(result["display"]) == 18

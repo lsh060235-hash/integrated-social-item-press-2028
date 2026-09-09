@@ -32,11 +32,16 @@ def test_revised_campaigns_build_all_requested_bound_assets(tmp_path):
         root = tmp_path / campaign
         result = builder(source, root, commit)
         assert len(result['artifacts']) == count
+        provenance = {
+            (font['name'], font['family'], font['style'], font['sha256'])
+            for font in result['font_provenance']
+        }
         report = validate_visual_artifacts(source, result['receipt'], result['artifacts'], root)
         assert report['verified_binding_count'] == count
         for artifact, entry in zip(result['artifacts'], source['requests']):
             spec = json.loads((root / artifact['figure_spec_path']).read_text(encoding='utf-8'))
             assert spec['source_content'] == entry['source_content']
+            assert (spec['font_file'], spec['font_family'], spec['font_style'], spec['font_file_sha256']) in provenance
             display = result['display'][entry['item_id'] + '|' + entry['data_id']]
             assert all(line in entry['source_content'].splitlines() for line in display['replace_lines'])
             assert (root / display['svg_path']).is_file()
@@ -148,9 +153,10 @@ def test_m01_flood_panels_preserve_common_two_by_three_spatial_cells(built):
         assert len({c.attrib['x'] for c in selected}) == 3
 
 
-def test_m01_record_card_svg_and_raster_spec_use_same_serif_font(built):
+def test_m01_record_card_svg_and_raster_spec_use_same_font(built):
     svg, spec, _ = figure(built, 'M01', 3, 'DIARY-A')
-    assert svg.find('s:g', NS).attrib['font-family'].split(',')[0] == spec['font_family'] == 'Batang'
+    assert svg.find('s:g', NS).attrib['font-family'] == spec['font_family']
+    assert spec['font_file_sha256']
 
 
 def test_flood_grid_panels_do_not_overlap_or_cover_third_column_glyphs(built):
@@ -158,7 +164,7 @@ def test_flood_grid_panels_do_not_overlap_or_cover_third_column_glyphs(built):
     panels = [[cell for cell in svg.findall('.//s:rect[@data-flood-cell]', NS) if cell.attrib['data-panel'] == str(index)] for index in (0, 1)]
     assert max(float(c.attrib['x']) + float(c.attrib['width']) for c in panels[0]) < min(float(c.attrib['x']) for c in panels[1])
     assert all(0 <= float(c.attrib['x']) < float(c.attrib['x']) + float(c.attrib['width']) <= float(svg.attrib['viewBox'].split()[2]) for panel in panels for c in panel)
-    font = ImageFont.truetype('C:/Windows/Fonts/malgun.ttf', 42)
+    font, _, _ = press_visuals._font()
     root, _ = built
     with Image.open(root / 'M01' / display['png_path']) as png:
         for label in ('C: 10', 'F: 200'):
@@ -174,7 +180,7 @@ def test_flood_grid_panels_do_not_overlap_or_cover_third_column_glyphs(built):
 @pytest.mark.parametrize('number,data,unit', [(13, 'WORK-A', '(kWh/주)'), (19, 'INDEX-B', '(지수)')])
 def test_chart_unit_glyph_bounds_do_not_intersect_tick_labels(built, number, data, unit):
     svg, _, _ = figure(built, 'M01', number, data)
-    font = ImageFont.truetype('C:/Windows/Fonts/malgun.ttf', 42)
+    font, _, _ = press_visuals._font()
     def bounds(text):
         x, y = float(text.attrib['x']), float(text.attrib['y'])
         a, b, c, d = font.getbbox(text.text)
@@ -189,7 +195,7 @@ def test_m02_climate_calendar_labels_stay_on_one_line_with_month_unit(built):
     svg, _, _ = figure(built, 'M02', 5, 'DATA-A')
     for period in ('1~3월', '4~6월', '7~9월', '10~12월'):
         assert sum(t.text == period for t in svg.findall('.//s:text', NS)) == 4
-    font = ImageFont.truetype('C:/Windows/Fonts/malgun.ttf', 42)
+    font, _, _ = press_visuals._font()
     rows = {}
     for t in svg.findall('.//s:text', NS):
         if t.text in ('1~3월', '4~6월', '7~9월', '10~12월'):

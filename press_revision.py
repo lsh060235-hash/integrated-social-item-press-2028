@@ -16,6 +16,17 @@ from press_contract import _forge_api, ContractError
 ROOT=Path(__file__).resolve().parent
 
 
+def visual_font_manifest(result):
+    fonts=result.get('font_provenance')
+    if not isinstance(fonts,list) or not fonts:
+        raise ContractError('VISUAL_FONT_PROVENANCE_MISSING')
+    required={'name','family','style','sha256','purpose'}
+    if any(set(font)!=required or font['purpose']!='visuals' or
+           re.fullmatch(r'[0-9a-f]{64}',font['sha256']) is None for font in fonts):
+        raise ContractError('VISUAL_FONT_PROVENANCE_INVALID')
+    return [dict(font) for font in fonts]
+
+
 def verify_saved_plan(out):
     from press_verify import sha
     out=Path(out)
@@ -267,6 +278,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         'packages':{name:version(name) for name in ('python-hwpx','Pillow','PyMuPDF','jsonschema')},
         'forge_commit':provenance['commit'],'forge_dirty':provenance['dirty'],
         'forge_source_files':[],'fonts':[]}
+    runtime['fonts'].extend(visual_font_manifest(result))
     paths=list((Path(forge_root)/'src').rglob('*.py'))+list((Path(forge_root)/'schemas').rglob('*.json'))
     for path in sorted(paths):
         relative=path.relative_to(forge_root)

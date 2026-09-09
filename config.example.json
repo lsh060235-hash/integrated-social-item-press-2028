@@ -1,4 +1,15 @@
 {
   "forge_root": "../integrated-social-item-forge",
-  "campaign_id": "FRG-SOC-2028-M01"
+  "campaign_id": "FRG-SOC-2028-M01",
+  "visual_fonts": {
+    "family": "SidaeAi",
+    "regular": {
+      "path": "C:/path/to/SidaeAi-Regular-3.1.otf",
+      "sha256": "b857745c61c16ec2cad43aca52425f901212d5e0ea3113bb1730e2363157fd56"
+    },
+    "italic": {
+      "path": "C:/path/to/SidaeAi-Italic-3.1.otf",
+      "sha256": "33e02982aef5c90a6fd918e15cdad5cebb377f2091cc56d103ab1a52af2bf994"
+    }
+  }
 }

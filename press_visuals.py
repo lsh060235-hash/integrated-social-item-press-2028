@@ -26,6 +26,7 @@ _FONT_CANDIDATES = (
     Path("C:/Windows/Fonts/malgun.ttf"),
     Path("C:/Windows/Fonts/batang.ttc"),
 )
+_LOCAL_CONFIG = Path(__file__).parent / "config.local.json"
 
 # Each tuple is render mode, zero-based source line indices, and whether those
 # exact lines replace the native body copy. Table-only statistics stay native.
@@ -439,10 +440,69 @@ def _file_sha256(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def _font() -> tuple[ImageFont.FreeTypeFont, Path]:
+def _configured_font(style: str = "regular", config_path: Path = _LOCAL_CONFIG) -> dict[str, Any] | None:
+    config_path = Path(config_path)
+    if not config_path.is_file():
+        return None
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise VisualBuildError("VISUAL_FONT_CONFIG_INVALID") from exc
+    fonts = config.get("visual_fonts")
+    if fonts is None:
+        return None
+    if not isinstance(fonts, dict) or not isinstance(fonts.get(style), dict):
+        raise VisualBuildError(f"VISUAL_FONT_STYLE_MISSING: {style}")
+    family = fonts.get("family")
+    raw_path = fonts[style].get("path")
+    digest = fonts[style].get("sha256")
+    if not isinstance(family, str) or not family.strip() or not isinstance(raw_path, str):
+        raise VisualBuildError("VISUAL_FONT_CONFIG_INVALID")
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-fA-F]{64}", digest) is None:
+        raise VisualBuildError("VISUAL_FONT_CONFIG_INVALID")
+    font_path = Path(raw_path).expanduser()
+    if not font_path.is_absolute():
+        font_path = config_path.parent / font_path
+    font_path = font_path.resolve()
+    if not font_path.is_file():
+        raise VisualBuildError(f"VISUAL_FONT_UNAVAILABLE: {font_path}")
+    actual_digest = _file_sha256(font_path)
+    if actual_digest.lower() != digest.lower():
+        raise VisualBuildError(f"VISUAL_FONT_SHA256_MISMATCH: {font_path.name}")
+    return {
+        "path": font_path,
+        "family": family.strip(),
+        "style": style,
+        "sha256": actual_digest,
+    }
+
+
+def _font(style: str = "regular") -> tuple[ImageFont.FreeTypeFont, Path, dict[str, Any]]:
+    configured = _configured_font(style)
+    if configured is not None:
+        path = configured["path"]
+        try:
+            font = ImageFont.truetype(str(path), _FONT_SIZE)
+        except OSError as exc:
+            raise VisualBuildError(f"VISUAL_FONT_LOAD_FAILED: {path.name}") from exc
+        loaded_family, loaded_style = font.getname()
+        if loaded_family.casefold() != configured["family"].casefold():
+            raise VisualBuildError(
+                f"VISUAL_FONT_FAMILY_MISMATCH: {loaded_family} != {configured['family']}"
+            )
+        if loaded_style.casefold() != style.casefold():
+            raise VisualBuildError(f"VISUAL_FONT_STYLE_MISMATCH: {loaded_style} != {style}")
+        return font, path, {**configured, "configured": True}
     for path in _FONT_CANDIDATES:
         if path.is_file():
-            return ImageFont.truetype(str(path), _FONT_SIZE), path
+            family = "Batang" if path.name.lower().startswith("batang") else "Malgun Gothic"
+            return ImageFont.truetype(str(path), _FONT_SIZE), path, {
+                "path": path.resolve(),
+                "family": family,
+                "style": style,
+                "sha256": _file_sha256(path),
+                "configured": False,
+            }
     raise VisualBuildError("KOREAN_FONT_UNAVAILABLE")
 
 
@@ -832,6 +892,7 @@ def _render(
     svg_path: Path,
     font: ImageFont.FreeTypeFont,
     font_path: Path,
+    font_family: str,
 ) -> tuple[float, float]:
     if mode == "table":
         height, ops = _table_ops(lines, font)
@@ -893,11 +954,10 @@ def _render(
             )
     width_mm = _WIDTH / _DPI * 25.4
     height_mm = height / _DPI * 25.4
-    svg_font_family = "Batang" if font_path.name.lower().startswith("batang") else "Malgun Gothic"
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width_mm:.2f}mm" height="{height_mm:.2f}mm" '
         f'viewBox="0 0 {_WIDTH} {height}"><rect width="100%" height="100%" fill="white"/>'
-        f'<g font-family="{svg_font_family}" font-size="{_FONT_SIZE}px" fill="black" '
+        f'<g font-family="{html.escape(font_family, quote=True)}" font-size="{_FONT_SIZE}px" fill="black" '
         f'style="white-space:pre">{"".join(svg_ops)}</g>'
         f'<!-- raster font: {html.escape(font_path.name)} --></svg>\n'
     )
@@ -923,10 +983,11 @@ def _build_visuals(request, out_root, press_commit, rules):
         if not directory.resolve().is_relative_to(root):
             raise VisualBuildError("UNSAFE_OUTPUT_ROOT")
 
-    font, font_path = _font()
+    font, font_path, font_metadata = _font()
     bindings: list[dict[str, Any]] = []
     artifacts: list[dict[str, Any]] = []
     display: dict[str, dict[str, Any]] = {}
+    used_fonts: dict[tuple[str, str, str, str], dict[str, str]] = {}
     for entry in request["requests"]:
         pair = entry["item_id"], entry["data_id"]
         mode, indices, replace = rules[pair]
@@ -941,10 +1002,26 @@ def _build_visuals(request, out_root, press_commit, rules):
         png_rel = Path("png") / f"{stem}.png"
         topology = (_revision_topology(mode, core_lines) if mode.startswith("revision_")
                     else _topology_for(mode, source_lines, core_lines))
-        figure_font, figure_font_path = font, font_path
-        if mode == "serif_schematic":
+        figure_font, figure_font_path, figure_font_metadata = font, font_path, font_metadata
+        if mode == "serif_schematic" and not font_metadata["configured"]:
             figure_font_path = Path("C:/Windows/Fonts/batang.ttc")
             figure_font = ImageFont.truetype(str(figure_font_path), _FONT_SIZE)
+            figure_font_metadata = {
+                "path": figure_font_path.resolve(),
+                "family": "Batang",
+                "style": "regular",
+                "sha256": _file_sha256(figure_font_path),
+                "configured": False,
+            }
+        public_font_metadata = {
+            "name": figure_font_path.name,
+            "family": figure_font_metadata["family"],
+            "style": figure_font_metadata["style"],
+            "sha256": figure_font_metadata["sha256"],
+            "purpose": "visuals",
+        }
+        font_key = tuple(public_font_metadata[key] for key in ("name", "family", "style", "sha256"))
+        used_fonts[font_key] = public_font_metadata
         width_mm, height_mm = _render(
             mode,
             core_lines,
@@ -953,6 +1030,7 @@ def _build_visuals(request, out_root, press_commit, rules):
             root / svg_rel,
             figure_font,
             figure_font_path,
+            figure_font_metadata["family"],
         )
         core_variables: dict[str, Any] = {"lines": core_lines}
         if topology is not None:
@@ -977,7 +1055,10 @@ def _build_visuals(request, out_root, press_commit, rules):
             "core_variables": core_variables,
             "width_mm": width_mm,
             "height_mm": height_mm,
-            "font_family": "Malgun Gothic" if figure_font_path.name.lower().startswith("malgun") else "Batang",
+            "font_family": figure_font_metadata["family"],
+            "font_style": figure_font_metadata["style"],
+            "font_file": figure_font_path.name,
+            "font_file_sha256": figure_font_metadata["sha256"],
             "minimum_font_pt": _FONT_SIZE * 72 / _DPI,
             "color_mode": "black_and_white",
         }
@@ -1018,7 +1099,12 @@ def _build_visuals(request, out_root, press_commit, rules):
         "press_commit": press_commit,
         "bindings": bindings,
     }
-    return {"receipt": receipt, "artifacts": artifacts, "display": display}
+    return {
+        "receipt": receipt,
+        "artifacts": artifacts,
+        "display": display,
+        "font_provenance": [used_fonts[key] for key in sorted(used_fonts)],
+    }
 
 # Source-specific topology renderers remain gated by the audited hash/selector registry.
 _M03_MODES = {'revision_'+name for name in ('paired_culture','temperature','commute',

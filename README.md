@@ -13,6 +13,8 @@ python -X utf8 -m pytest -q
 
 전체 회귀 테스트에는 Windows 글꼴, Forge와 M01 r7·M02 r1 원본 검토 ZIP이 필요하다. 경로를 생략하면 저장소 옆 `integrated-social-item-forge`, `outputs/social-language-20260908`을 사용한다. 통합 테스트를 요청했는데 입력이 없으면 오류로 종료한다.
 
+도판 전용 서체는 Git에서 제외되는 `config.local.json`의 `visual_fonts`에 Regular·Italic 파일 경로와 SHA-256을 기록한다. 현재 도판은 Regular를 기본으로 사용하고, 실제 기울임 표기가 필요한 렌더링만 Italic을 요청한다. 설정한 파일이 없거나 해시가 달라지면 다른 서체로 대체하지 않고 제작을 중단한다. 설정이 없을 때만 Windows 기본 한글 서체를 사용한다.
+
 v0.4의 최신 묶음 테스트에는 M01 language-v2-r1·M02 language-v2-r2·M03 higher-v4 ZIP도 필요하다. 기본 위치는 Forge의 `deliveries/2026-09-08-language-v2`이며 `PRESS_DELIVERY_ROOT`로 바꿀 수 있다. 새 `FILE_MANIFEST.json`/통합 검토 기록과 종전 개별 패킷 형식을 모두 검사한다.
 
 ```powershell
