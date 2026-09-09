@@ -195,9 +195,11 @@ def _compact_choices(doc, choices, chars, paras):
     # Conservative width estimate, followed by inspection of the actual Hancom PDF.
     widths=[sum(2 if unicodedata.east_asian_width(c) in 'WFA' else 1 for c in s)
             * BODY_SIZE / 2 + 8 for s in labels]
-    if any('\n' in c for c in choices) or sum(widths)>COLUMN_MM*72/25.4:
+    available=INNER_MM*72/25.4
+    if (any('\n' in c for c in choices) or sum(widths)>available
+        or max(widths)>available/4):
         return False
-    table=_table(doc,[labels],chars,paras,width_mm=COLUMN_MM,header=False)
+    table=_table(doc,[labels],chars,paras,width_mm=INNER_MM,header=False)
     table.set_column_widths(widths)
     table.paragraph.element.set('paraPrIDRef',paras['last'])
     _borderless(doc,table)

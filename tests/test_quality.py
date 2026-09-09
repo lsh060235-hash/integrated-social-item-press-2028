@@ -16,7 +16,7 @@ from test_layout import packet, NS
 
 def test_short_choices_use_one_row_without_changing_order(tmp_path):
     data = packet()
-    choices = ['갑', '을', '병', '해당 대안 없음', '정']
+    choices = ['갑', '을', '병', '정', '무']
     data['items'][0]['student_view']['choices'] = choices
     path = layout.build_hwpx(data, tmp_path / 'compact.hwpx')
     with zipfile.ZipFile(path) as z:
@@ -25,6 +25,19 @@ def test_short_choices_use_one_row_without_changing_order(tmp_path):
     assert row is not None, 'Short choices should fit across a column'
     assert [''.join(t.text or '' for t in c.findall('.//hp:t', NS))
             for c in row] == [m + ' ' + c for m, c in zip(layout.CIRCLED, choices)]
+
+
+def test_asymmetric_choice_widths_fall_back_to_vertical_layout(tmp_path):
+    data = packet()
+    data['items'][0]['student_view']['choices'] = ['가', '나', '다', '해당 구성 없음', '라']
+    path = layout.build_hwpx(data, tmp_path / 'compact-width.hwpx')
+    with zipfile.ZipFile(path) as z:
+        root = ET.fromstring(z.read('Contents/section0.xml'))
+    table = root.find('.//hp:tbl[@rowCnt="1"][@colCnt="5"]', NS)
+    assert table is None, 'One long cell is unsafe when the item lands in the right column'
+    text = ''.join(t.text or '' for t in root.findall('.//hp:t', NS))
+    assert all(marker + ' ' + choice in text
+               for marker, choice in zip(layout.CIRCLED, data['items'][0]['student_view']['choices']))
 
 
 def request():

@@ -1,6 +1,7 @@
 """Read-only revision ZIP intake and explicitly unapproved review-draft production."""
 from __future__ import annotations
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -16,6 +17,93 @@ from press_contract import _forge_api, ContractError
 ROOT=Path(__file__).resolve().parent
 
 
+def apply_student_editorial(packet,overlay):
+    if (not isinstance(overlay,dict)
+        or overlay.get('schema_version')!='press-student-editorial-v0.1'
+        or overlay.get('campaign_id')!=packet['campaign_id']
+        or overlay.get('source_version')!=packet['source_version']
+        or overlay.get('source_items_sha256')!=packet['binding']['canonical_artifacts']['items_sha256']):
+        raise ContractError('STUDENT_EDITORIAL_SOURCE_MISMATCH')
+    entries=overlay.get('conditions')
+    if not isinstance(entries,list) or not entries:
+        raise ContractError('STUDENT_EDITORIAL_CONDITIONS_REQUIRED')
+    result=copy.deepcopy(packet)
+    conditions={(item['item_id'],condition['condition_id']):condition
+                for item in result['items'] for condition in item['student_view']['conditions']}
+    seen=set()
+    required={'item_id','condition_id','source_content_sha256','content'}
+    for entry in entries:
+        if not isinstance(entry,dict) or set(entry)!=required:
+            raise ContractError('STUDENT_EDITORIAL_ENTRY_INVALID')
+        key=entry['item_id'],entry['condition_id']
+        if key in seen: raise ContractError('STUDENT_EDITORIAL_DUPLICATE')
+        seen.add(key)
+        condition=conditions.get(key)
+        if condition is None: raise ContractError('STUDENT_EDITORIAL_CONDITION_UNKNOWN')
+        if (not isinstance(entry['source_content_sha256'],str)
+            or not isinstance(entry['content'],str)):
+            raise ContractError('STUDENT_EDITORIAL_CONTENT_MISMATCH')
+        source_sha=hashlib.sha256(condition['content'].encode('utf-8')).hexdigest()
+        if entry['source_content_sha256']!=source_sha:
+            raise ContractError('STUDENT_EDITORIAL_CONTENT_MISMATCH')
+        condition['content']=entry['content']
+    return result
+
+
+def validate_student_editorial_visuals(packet,plan):
+    """Keep every source line used by a bound visual unchanged."""
+    conditions={(item['item_id'],condition['condition_id']):condition['content'].splitlines()
+                for item in packet['items'] for condition in item['student_view']['conditions']}
+    for figure in plan['figures']:
+        lines=conditions.get((figure['item_id'],figure['data_id']))
+        if lines is None:
+            raise ContractError('STUDENT_EDITORIAL_VISUAL_SOURCE_MISSING')
+        for selector in figure['lines']:
+            text=selector.get('text') if isinstance(selector,dict) else selector
+            occurrence=selector.get('occurrence') if isinstance(selector,dict) else 0
+            matches=[n for n,line in enumerate(lines) if line==text]
+            if (not isinstance(text,str) or type(occurrence) is not int
+                or not 0<=occurrence<len(matches)
+                or (isinstance(selector,str) and len(matches)!=1)):
+                raise ContractError('STUDENT_EDITORIAL_VISUAL_SOURCE_CHANGED')
+
+
+def augment_student_table_visuals(packet,production_packet,plan):
+    """Rasterize source-bound tables after an editorial reflow changes pagination."""
+    request=copy.deepcopy(packet['visual_handoff'])
+    result_plan=copy.deepcopy(plan)
+    figures={(figure['item_id'],figure['data_id']):figure
+             for figure in result_plan['figures']}
+    preserve=['labels','values','units','legends','spatial_and_temporal_relations']
+    for item in production_packet['items']:
+        for condition in item['student_view']['conditions']:
+            source=condition['content']
+            lines=source.splitlines()
+            indices=[n for n,line in enumerate(lines) if '|' in line]
+            if not indices:
+                continue
+            key=item['item_id'],condition['condition_id']
+            figure=figures.get(key)
+            if figure is not None:
+                if figure['mode']=='table':
+                    figure['replace']=True
+                continue
+            digest=hashlib.sha256(source.encode('utf-8')).hexdigest()
+            request['requests'].append({'item_id':key[0],'data_id':key[1],
+                'material_kind':'STATISTIC','data_grammar':['TABLE'],
+                'source_content':source,'source_content_sha256':digest,'preserve':preserve})
+            selectors=[]
+            for n in indices:
+                line=lines[n]
+                selectors.append(line if lines.count(line)==1 else
+                                 {'text':line,'occurrence':lines[:n].count(line)})
+            figure={'item_id':key[0],'data_id':key[1],'source_content_sha256':digest,
+                'mode':'table','lines':selectors,'replace':True}
+            result_plan['figures'].append(figure)
+            figures[key]=figure
+    return request,result_plan
+
+
 def verify_saved_plan(out):
     from press_verify import sha,verify_file_binding
     out=Path(out)
@@ -26,6 +114,16 @@ def verify_saved_plan(out):
     if editorial.exists() or verification.get('solution_editorial_sha256'):
         if not editorial.is_file() or sha(editorial)!=verification.get('solution_editorial_sha256'):
             raise ContractError('SOLUTION_EDITORIAL_CHANGED_AFTER_BUILD')
+    student_editorial=out/'student-editorial.json'
+    if student_editorial.exists() or verification.get('student_editorial_sha256'):
+        if (not student_editorial.is_file()
+            or sha(student_editorial)!=verification.get('student_editorial_sha256')):
+                raise ContractError('STUDENT_EDITORIAL_CHANGED_AFTER_BUILD')
+    render_handoff=out/'render-visual-handoff.json'
+    if render_handoff.exists() or verification.get('render_visual_handoff_sha256'):
+        if (not render_handoff.is_file()
+            or sha(render_handoff)!=verification.get('render_visual_handoff_sha256')):
+            raise ContractError('RENDER_VISUAL_HANDOFF_CHANGED_AFTER_BUILD')
     provenance=[out/'runtime.json']+[path for path in (out/'reproduction').rglob('*') if path.is_file()]
     expected={path.relative_to(out).as_posix() for path in provenance}
     verify_file_binding(out,verification.get('reproduction_files'),expected)
@@ -170,7 +268,8 @@ def validate_revision(packet,archive,forge_root):
     if packet!=load_revision(archive,forge_root):
         raise ContractError('REVISION_PACKET_MISMATCH')
 
-def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,reference_map=None,solution_overlay=None):
+def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,reference_map=None,
+                   solution_overlay=None,student_overlay=None):
     from press import write_json
     from press_layout import build_hwpx,render_hangul
     from press_visuals import build_revision_visuals,make_visual_plan,compile_visual_plan
@@ -180,11 +279,23 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     import fitz
     from press_solutions import apply_editorial,verify_solutions
     packet=load_revision(archive,forge_root)
+    student_editorial=(json.loads(Path(student_overlay).read_text(encoding='utf-8-sig'))
+                       if student_overlay else None)
+    production_packet=(apply_student_editorial(packet,student_editorial)
+                       if student_editorial is not None else packet)
     editorial=json.loads(Path(solution_overlay).read_text(encoding='utf-8-sig')) if solution_overlay else None
-    teacher_packet=apply_editorial(packet,editorial) if editorial is not None else packet
+    teacher_packet=(apply_editorial(production_packet,editorial)
+                    if editorial is not None else production_packet)
     plan=(json.loads(Path(visual_plan).read_text(encoding='utf-8-sig')) if visual_plan else
           make_visual_plan(packet['visual_handoff']))
     compile_visual_plan(packet['visual_handoff'],plan)
+    render_handoff=packet['visual_handoff']
+    if student_editorial is not None:
+        render_handoff,plan=augment_student_table_visuals(packet,production_packet,plan)
+        compile_visual_plan(render_handoff,plan)
+    validate_student_editorial_visuals(production_packet,plan)
+    render_packet=copy.deepcopy(production_packet)
+    render_packet['visual_handoff']=render_handoff
     out=Path(out).resolve()
     if out.exists(): raise ContractError('OUTPUT_EXISTS')
     if subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip():
@@ -197,14 +308,17 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         dest.parent.mkdir(parents=True,exist_ok=True)
         shutil.copyfile(ROOT/n,dest)
     write_json(out/'input-packet.json',packet)
+    if student_editorial is not None: write_json(out/'student-editorial.json',student_editorial)
     if editorial is not None: write_json(out/'solution-editorial.json',editorial)
     write_json(out/'visual-plan.json',plan)
-    result=build_revision_visuals(packet['visual_handoff'],out/'figures',commit,plan)
+    if render_handoff!=packet['visual_handoff']:
+        write_json(out/'render-visual-handoff.json',render_handoff)
+    result=build_revision_visuals(render_handoff,out/'figures',commit,plan)
     write_json(out/'visual-result.json',result)
     write_json(out/'visual-handoff.json',packet['visual_handoff'])
     write_json(out/'visual-receipt.json',result['receipt'])
     write_json(out/'visual-artifacts.json',result['artifacts'])
-    bytes_report=validate_visual_result(packet['visual_handoff'],result,out/'figures')
+    bytes_report=validate_visual_result(render_handoff,result,out/'figures')
     render={}
     # Exercise two distinct visible figure families when possible.
     pilot_numbers=[]; modes=set()
@@ -221,7 +335,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         folder=out/group; folder.mkdir()
         stem={'pilot':'two-items','student':'exam','teacher':'solutions'}[group]
         hwpx,pdf=folder/(stem+'.hwpx'),folder/(stem+'.pdf')
-        build_hwpx(teacher_packet if teacher else packet,hwpx,numbers,teacher=teacher,
+        build_hwpx(teacher_packet if teacher else render_packet,hwpx,numbers,teacher=teacher,
             visuals=None if teacher else result,artifact_root=out/'figures')
         render[group]=render_hangul(hwpx,pdf)
         if teacher:
@@ -236,14 +350,14 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
                 verify_solutions(teacher_packet,pdf)
                 adjustments.append({'reason':'solution_final_column_split','balance_solution_columns':False})
         else:
-            check=verify_exam(packet,hwpx,pdf,result,out/'figures',numbers)
+            check=verify_exam(production_packet,hwpx,pdf,result,out/'figures',numbers)
             if check['mechanical_status']!='PASS': raise ContractError('RENDER_VERIFICATION_FAILED: '+repr(check['errors']))
             starts=balance_last_column(check['locations']) if group=='student' else ()
             if starts:
                 old_pages=render[group]['pages']
-                build_hwpx(packet,hwpx,visuals=result,artifact_root=out/'figures',column_starts=starts)
+                build_hwpx(render_packet,hwpx,visuals=result,artifact_root=out/'figures',column_starts=starts)
                 render[group]=render_hangul(hwpx,pdf)
-                check=verify_exam(packet,hwpx,pdf,result,out/'figures')
+                check=verify_exam(production_packet,hwpx,pdf,result,out/'figures')
                 if check['mechanical_status']!='PASS' or render[group]['pages']!=old_pages:
                     raise ContractError('BALANCED_RENDER_VERIFICATION_FAILED')
                 adjustments.append({'reason':'two_items_on_final_left_column','column_starts':starts})
@@ -259,11 +373,14 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         'layout_adjustments':adjustments,'visual_plan_sha256':sha(out/'visual-plan.json'),
         'agent_page_review':'PENDING','human_release_approval':None})
     if editorial is not None: verification['solution_editorial_sha256']=sha(out/'solution-editorial.json')
+    if student_editorial is not None:
+        verification['student_editorial_sha256']=sha(out/'student-editorial.json')
+        verification['render_visual_handoff_sha256']=sha(out/'render-visual-handoff.json')
     reference=None
     if reference_pdf:
         maps=json.loads(Path(reference_map or ROOT/'profiles/kice-reference-map.json').read_text(encoding='utf-8-sig'))
         reference={'pdf_sha256':maps['pdf_sha256'],'items':maps['campaigns'][packet['campaign_id']]}
-    item_review=build_item_review(packet,out/'student/exam.pdf',out/'item-review',
+    item_review=build_item_review(production_packet,out/'student/exam.pdf',out/'item-review',
                                  reference_pdf=reference_pdf,reference_map=reference)
     verification['largest_items']=sorted(item_review['items'],key=lambda i:i['height_pt'],reverse=True)[:5]
     provenance=forge_provenance(forge_root)
@@ -297,17 +414,27 @@ def seal_revision(archive,forge_root,out):
     packet=json.loads((out/'input-packet.json').read_text(encoding='utf-8'))
     validate_revision(packet,archive,forge_root)
     from press_solutions import apply_editorial,verify_solutions
+    student_editorial=out/'student-editorial.json'
+    production_packet=(apply_student_editorial(
+        packet,json.loads(student_editorial.read_text(encoding='utf-8')))
+        if student_editorial.exists() else packet)
+    plan=json.loads((out/'visual-plan.json').read_text(encoding='utf-8'))
+    validate_student_editorial_visuals(production_packet,plan)
     editorial=out/'solution-editorial.json'
-    teacher_packet=apply_editorial(packet,json.loads(editorial.read_text(encoding='utf-8'))) if editorial.exists() else packet
+    teacher_packet=(apply_editorial(
+        production_packet,json.loads(editorial.read_text(encoding='utf-8')))
+        if editorial.exists() else production_packet)
     verify_solutions(teacher_packet,out/'teacher/solutions.pdf')
     if sha(out/'source-input.zip')!=packet['binding']['source_zip_sha256']:
         raise ContractError('SOURCE_COPY_MISMATCH')
     result=json.loads((out/'visual-result.json').read_text(encoding='utf-8'))
-    validate_visual_result(packet['visual_handoff'],result,out/'figures')
-    check=verify_exam(packet,out/'student/exam.hwpx',out/'student/exam.pdf',result,out/'figures')
+    render_handoff=(json.loads((out/'render-visual-handoff.json').read_text(encoding='utf-8'))
+                    if (out/'render-visual-handoff.json').exists() else packet['visual_handoff'])
+    validate_visual_result(render_handoff,result,out/'figures')
+    check=verify_exam(production_packet,out/'student/exam.hwpx',out/'student/exam.pdf',result,out/'figures')
     if check['mechanical_status']!='PASS': raise ContractError('SEAL_VERIFICATION_FAILED')
     review=json.loads((out/'agent-page-review.json').read_text(encoding='utf-8'))
-    validate_item_review(packet,out/'student/exam.pdf',review)
+    validate_item_review(production_packet,out/'student/exam.pdf',review)
     for key,path in [('exam','student/exam.pdf'),('solutions','teacher/solutions.pdf')]:
         with fitz.open(out/path) as d:
             if review[key+'_pdf_sha256']!=sha(out/path) or review[key+'_pages_reviewed']!=list(range(1,len(d)+1)):
@@ -333,6 +460,7 @@ def main():
     parser.add_argument('--reference-pdf',type=Path,help='Local official reference PDF for per-item comparison')
     parser.add_argument('--reference-map',type=Path,help='Reference SHA, campaign mapping and crop coordinates')
     parser.add_argument('--solution-overlay',type=Path,help='Source-bound editorial explanations; preserves original teacher evidence')
+    parser.add_argument('--student-overlay',type=Path,help='Source-bound condition wording edits; preserves original input packet')
     args=parser.parse_args()
     if args.command=='verify':
         from press_verify import verify_manifest
@@ -347,7 +475,8 @@ def main():
             packet=load_revision(args.archive,args.forge_root)
             write_json(args.out,make_visual_plan(packet['visual_handoff']))
         elif args.command=='build':
-            build_revision(args.archive,args.forge_root,args.out,args.visual_plan,args.reference_pdf,args.reference_map,args.solution_overlay)
+            build_revision(args.archive,args.forge_root,args.out,args.visual_plan,args.reference_pdf,
+                           args.reference_map,args.solution_overlay,args.student_overlay)
         else:
             seal_revision(args.archive,args.forge_root,args.out)
 

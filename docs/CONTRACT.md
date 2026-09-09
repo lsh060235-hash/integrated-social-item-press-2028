@@ -42,7 +42,17 @@ validate_packet(packet, forge)
 
 각 `items[]` entry는 `number`, `points`, `item_id`, `source_item_sha256`,
 `item_revision`, `student_view`, `teacher`, `materials`,
-`core_data_relations`만 가진다. `student_view`는 Forge 원문을 그대로 복사한다.
+`core_data_relations`만 가진다. 입력 계약의 `student_view`는 Forge 원문을 그대로 복사한다.
+사용자가 특정 제작본의 자료 표현 교정을 요청하면 Press는 원본 패킷을 유지한 채
+`press-student-editorial-v0.1` 교정본을 별도로 결합할 수 있다. 교정본은
+`schema_version`, `campaign_id`, `source_version`, `source_items_sha256`, `conditions`를
+가지며, 각 `conditions` 항목은 `item_id`, `condition_id`, `source_content_sha256`,
+`content`만 가진다. 회차·판본·items SHA와 조건 원문 SHA가 모두 일치해야 하며,
+조건 내용만 바꿀 수 있다. 발문·선택지·정답·교사용 근거와 시각 자료로 선택된
+원문 줄은 바꿀 수 없다.
+표현 교정으로 지면 흐름이 달라질 때 Press는 표의 원문 줄을 모두 해시에 결박한
+`render-visual-handoff.json`을 만들고 표를 검증된 그림으로 치환할 수 있다. 이 파일은
+Forge의 원본 `visual_handoff`를 대체하지 않으며 해당 제작본의 렌더링 근거로만 쓴다.
 `item_revision`은 원문에 `item_version`이 있으면 그 값을, 그다음 `version` 값을
 사용하며 둘 다 없으면 `source_item_sha256`을 content-addressed revision으로
 사용한다.

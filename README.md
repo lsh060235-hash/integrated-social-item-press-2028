@@ -33,9 +33,16 @@ python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-r
 
 M01 r7·M02 r1 및 최신 M01 language-v2-r1·M02 language-v2-r2·M03 v4의 검토된 도식 설정을 기본 제공한다. 원문 해시가 달라지면 이전 줄 번호를 적용하지 않는다. 새 회차·수정 자료는 설정을 내보내고 mode, lines, replace를 검토한 뒤 제작한다.
 
+사용자가 특정 제작본의 학생 자료 표현 교정을 명시적으로 요청한 경우 `--student-overlay`로 원문 해시에 결합된 조건별 교정 JSON을 적용할 수 있다. 원본 `input-packet.json`은 유지하고 적용본을 `student-editorial.json`에 보관한다. 발문·선택지·정답은 이 경로로 바꿀 수 없다.
+표현 교정으로 지면 흐름이 달라지는 경우 표 자료는 원문 줄과 해시에 결합된 검증용 그림으로 렌더링하여 한컴의 단 배치에 따른 셀 누락을 막는다.
+
 ```powershell
 python -X utf8 press_revision.py plan --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/visual-plan.json
 python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --visual-plan work/visual-plan.json --out work/run-002
+```
+
+```powershell
+python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --student-overlay 'C:/input/student-editorial.json' --out work/run-edited
 ```
 
 `table`, `schematic`, `serif_schematic`, `bar_matrix`, `bar_list`는 정해진 자료 문법으로 재사용할 수 있다. 지도·기후·흐름 등 전용 도식은 단위·축·관계가 검토된 원문/선택 줄/치환 방식에만 허용한다. 새로운 지도 문법에는 별도 구현과 검토가 필요하다. 같은 원문 줄이 반복되면 `{"text":"원문 줄","occurrence":1}`처럼 0부터 세는 출현 순서를 지정한다. 미지원 자료를 임의 도식으로 대체하지 않는다.
@@ -52,7 +59,7 @@ python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-r
 
 ## 출력과 검토
 
-- student/exam.hwpx, exam.pdf: 학생용. 본문·표는 네이티브 편집 가능, 도식은 PNG이며 SVG/명세로 재생성한다.
+- student/exam.hwpx, exam.pdf: 학생용. 본문·표는 네이티브 편집 가능, 도식은 PNG이며 SVG/명세로 재생성한다. 요청된 학생 자료 교정은 별도 원문 결합 기록으로 적용한다.
 - teacher/solutions.hwpx, solutions.pdf, answer-key.txt: 정답·해설. 기본은 원문이며 `--solution-overlay`를 지정하면 주제·정답 해설·오답피하기로 교정한 해설을 출력한다.
 - preview: 학생용·교사용·파일럿 전쪽 미리보기.
 - item-review/index.html, items.json: 문항별 검토 이미지와 PDF 연결 정보. 자동 상태는 PENDING이다.
