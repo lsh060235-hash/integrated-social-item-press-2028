@@ -28,6 +28,47 @@ def test_manifest_rejects_escape(tmp_path):
     with pytest.raises(ValueError,match='PATH'):
         verify.verify_manifest(tmp_path,{'files':[{'path':'../secret','sha256':'a'*64}]})
 
+@pytest.mark.parametrize('extra_path',['extra.txt','nested/return-manifest.json'])
+def test_return_verifier_rejects_unlisted_extra_file(tmp_path,extra_path):
+    (tmp_path/'a.txt').write_text('bound',encoding='utf-8')
+    manifest=verify.make_manifest(tmp_path, {'items_sha256':'a'*64})
+    extra=tmp_path/extra_path;extra.parent.mkdir(parents=True,exist_ok=True)
+    extra.write_text('unlisted',encoding='utf-8')
+    with pytest.raises(ValueError,match='COVERAGE'):
+        verify.verify_manifest(tmp_path,manifest)
+
+def test_return_verifier_rejects_duplicate_entries_and_wrong_size(tmp_path):
+    (tmp_path/'a.txt').write_text('bound',encoding='utf-8')
+    manifest=verify.make_manifest(tmp_path, {'items_sha256':'a'*64})
+    manifest['files'].append(dict(manifest['files'][0]))
+    with pytest.raises(ValueError,match='DUPLICATE'):
+        verify.verify_manifest(tmp_path,manifest)
+    manifest['files'].pop()
+    manifest['files'][0]['bytes']+=1
+    with pytest.raises(ValueError,match='SIZE'):
+        verify.verify_manifest(tmp_path,manifest)
+
+def test_return_manifest_rejects_symlinked_files(tmp_path):
+    root_manifest=tmp_path/'return-manifest.json';root_manifest.write_text('{}',encoding='utf-8')
+    nested=tmp_path/'nested';nested.mkdir()
+    link=nested/'return-manifest.json'
+    try:
+        link.symlink_to(root_manifest)
+    except OSError as exc:
+        pytest.skip(f'symlinks unavailable: {exc}')
+    with pytest.raises(ValueError,match='SYMLINK'):
+        verify.make_manifest(tmp_path, {'items_sha256':'a'*64})
+
+def test_return_manifest_rejects_root_manifest_symlink(tmp_path):
+    target=tmp_path/'target.json';target.write_text('{}',encoding='utf-8')
+    link=tmp_path/'return-manifest.json'
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f'symlinks unavailable: {exc}')
+    with pytest.raises(ValueError,match='SYMLINK'):
+        verify.make_manifest(tmp_path, {'items_sha256':'a'*64})
+
 def test_table_missing_cell_is_found_even_when_other_units_exist():
     missing=verify.missing_units(['시점','2030년','2032년'], '시점 2030년')
     assert missing == ['2032년']

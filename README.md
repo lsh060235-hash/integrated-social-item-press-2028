@@ -81,11 +81,11 @@ python -X utf8 press_revision.py seal --archive 'C:/input/review.zip' --forge-ro
 python -X utf8 press_revision.py verify --out work/run-003
 ```
 
-봉인은 도식 설정 해시와 PDF/검토 범위를 확인한다. verify는 봉인된 파일 바이트의 무결성 검사이며 내용 정답·시각적 완성도·최종 출고 승인은 별도다. human_release_approval을 자동으로 만들지 않는다.
+봉인은 도식 설정 해시, 도판별 서체 출처, 빌드 시점의 runtime/reproduction 파일, PDF/검토 범위를 확인한다. verify는 반환 명세에 기록된 정확한 파일 집합·크기·SHA-256을 검사하므로 누락·변조·중복 경로·미등록 추가 파일을 거부한다. 내용 정답·시각적 완성도·최종 출고 승인은 별도이며 human_release_approval을 자동으로 만들지 않는다.
 
 ## 재현과 이전 경로
 
-반환 묶음에는 실행 당시 Forge Python 파일·스키마를 보관한다. 수정된 로컬 소스도 해시와 함께 보관하고 변경 상태를 명시한다. runtime.json의 Press 커밋을 이 Git 저장소에서 체크아웃하고, 묶음의 source-input.zip, visual-plan.json, reproduction/forge를 각각 --archive, --visual-plan, --forge-root로 지정하면 해당 코드/입력을 다시 사용할 수 있다. 같은 Windows/한글/글꼴 환경이 필요하며 다른 환경의 PDF 바이트 동일성을 보장하지 않는다.
+반환 묶음에는 실행 당시 Forge Python 파일·스키마를 보관한다. 수정된 로컬 소스도 해시와 함께 보관하고 변경 상태를 명시하며, 이 재현 자료는 build에서 기록한 해시와 다르면 seal을 거부한다. runtime.json의 Press 커밋을 이 Git 저장소에서 체크아웃하고, 묶음의 source-input.zip, visual-plan.json, reproduction/forge를 각각 --archive, --visual-plan, --forge-root로 지정하면 해당 코드/입력을 다시 사용할 수 있다. 같은 Windows/한글/글꼴 환경이 필요하며 다른 환경의 PDF 바이트 동일성을 보장하지 않는다.
 
 이전 승인본 전용 press.py --config 경로는 v0.1 호환용이다. 새 기능은 press_revision.py 경로를 사용한다. [입력 계약](docs/CONTRACT.md), [교정 ZIP 검증](docs/REVISION_INPUT.md)을 참고한다. Forge와 과학 Press는 읽기 전용 참고이며 원본·글꼴·개인 경로·산출물을 Git에 넣지 않는다.
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 import press_visuals
-from press_revision import visual_font_manifest
+from press_verify import visual_font_manifest
 
 
 def write_config(path: Path, font_path: Path, digest: str) -> None:
@@ -106,3 +106,28 @@ def test_runtime_font_manifest_comes_from_pinned_visual_result():
             "purpose": "visuals",
         }
     ]
+
+
+def test_visual_font_manifest_must_match_every_rendered_figure_spec(tmp_path):
+    spec = {
+        "font_file": "SidaeAi-Regular-3.1.otf",
+        "font_family": "SidaeAi",
+        "font_style": "regular",
+        "font_file_sha256": "a" * 64,
+    }
+    (tmp_path / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    result = {
+        "artifacts": [{"figure_spec_path": "spec.json"}],
+        "font_provenance": [
+            {
+                "name": spec["font_file"],
+                "family": spec["font_family"],
+                "style": spec["font_style"],
+                "sha256": "b" * 64,
+                "purpose": "visuals",
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="VISUAL_FONT_PROVENANCE_MISMATCH"):
+        visual_font_manifest(result, tmp_path)

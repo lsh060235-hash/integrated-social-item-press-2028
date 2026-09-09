@@ -18,6 +18,65 @@ def sha(path):
         return hashlib.file_digest(f,'sha256').hexdigest()
 
 
+def make_file_binding(root, paths):
+    root=Path(root).resolve()
+    files=[]
+    for source in sorted((Path(path).absolute() for path in paths),key=lambda path:path.as_posix()):
+        if source.is_symlink(): raise ValueError('SYMLINK_BOUND_FILE: '+str(source))
+        source=source.resolve()
+        if not source.is_relative_to(root) or not source.is_file():
+            raise ValueError('UNSAFE_OR_MISSING_BOUND_FILE')
+        files.append({'path':source.relative_to(root).as_posix(),'sha256':sha(source),'bytes':source.stat().st_size})
+    return files
+
+
+def verify_file_binding(root, files, expected_paths=None):
+    root=Path(root).resolve()
+    if not isinstance(files,list): raise ValueError('FILE_BINDING_INVALID')
+    seen=set()
+    for entry in files:
+        if not isinstance(entry,dict) or not isinstance(entry.get('path'),str):
+            raise ValueError('FILE_BINDING_INVALID')
+        rel=entry['path']
+        if any(c in rel for c in ('\\',':','\x00')) or any(part in ('','..','.') for part in rel.split('/')):
+            raise ValueError('UNSAFE_RETURN_PATH')
+        if rel in seen: raise ValueError('DUPLICATE_RETURN_PATH: '+rel)
+        seen.add(rel)
+        if re.fullmatch(r'[0-9a-f]{64}',str(entry.get('sha256',''))) is None or not isinstance(entry.get('bytes'),int):
+            raise ValueError('FILE_BINDING_INVALID: '+rel)
+    for entry in files:
+        rel=entry['path'];path=root/rel
+        if path.is_symlink(): raise ValueError('SYMLINK_RETURN_FILE: '+rel)
+        path=path.resolve()
+        if not path.is_relative_to(root): raise ValueError('UNSAFE_RETURN_PATH')
+        if not path.is_file(): raise ValueError('RETURN_FILE_MISSING: '+rel)
+        if sha(path)!=entry['sha256']: raise ValueError('RETURN_SHA_MISMATCH: '+rel)
+        if path.stat().st_size!=entry['bytes']: raise ValueError('RETURN_SIZE_MISMATCH: '+rel)
+    if expected_paths is not None and seen!=set(expected_paths):
+        raise ValueError('RETURN_FILE_COVERAGE_MISMATCH')
+
+
+def visual_font_manifest(result, root=None):
+    fonts=result.get('font_provenance')
+    required={'name','family','style','sha256','purpose'}
+    if not isinstance(fonts,list) or not fonts: raise ValueError('VISUAL_FONT_PROVENANCE_MISSING')
+    if any(not isinstance(font,dict) or set(font)!=required or
+           any(not isinstance(font[key],str) for key in required) or font['purpose']!='visuals' or
+           re.fullmatch(r'[0-9a-f]{64}',str(font['sha256'])) is None for font in fonts):
+        raise ValueError('VISUAL_FONT_PROVENANCE_INVALID')
+    keys=[(font['name'],font['family'],font['style'],font['sha256']) for font in fonts]
+    if len(keys)!=len(set(keys)): raise ValueError('VISUAL_FONT_PROVENANCE_DUPLICATE')
+    if root is not None:
+        root=Path(root).resolve();spec_fonts=set()
+        for artifact in result.get('artifacts',[]):
+            path=(root/artifact['figure_spec_path']).resolve()
+            if not path.is_relative_to(root): raise ValueError('UNSAFE_FIGURE_SPEC_PATH')
+            spec=json.loads(path.read_text(encoding='utf-8'))
+            spec_fonts.add((spec['font_file'],spec['font_family'],spec['font_style'],spec['font_file_sha256']))
+        if set(keys)!=spec_fonts: raise ValueError('VISUAL_FONT_PROVENANCE_MISMATCH')
+    return [dict(font) for font in fonts]
+
+
 def normalized(text):
     return re.sub(r'[\s\u200b\ufeff]+','',text)
 
@@ -70,6 +129,7 @@ def match_pdf_figure(doc,path):
 def validate_visual_result(request,result,root):
     from integrated_social_forge.visual_handoff import validate_visual_artifacts
     report=validate_visual_artifacts(request,result['receipt'],result['artifacts'],Path(root))
+    visual_font_manifest(result,root)
     expected={a['item_id']+'|'+a['data_id']:a for a in result['artifacts']}
     requests={a['item_id']+'|'+a['data_id']:a for a in request['requests']}
     if set(result['display'])!=set(expected): raise ValueError('DISPLAY_COVERAGE')
@@ -93,25 +153,21 @@ def validate_visual_result(request,result,root):
 
 
 def make_manifest(root:Path,binding:dict) -> dict:
+    root=Path(root).resolve();manifest_path=root/'return-manifest.json'
+    if manifest_path.is_symlink(): raise ValueError('SYMLINK_RETURN_MANIFEST')
+    paths=[p for p in root.rglob('*') if p.is_file() and p!=manifest_path]
     return {'schema_version':'integrated-social-press-return-v0.1',
         'status':'DRAFT_FOR_HUMAN_REVIEW','human_release_approval':None,'input_binding':binding,
-        'files':[{'path':p.relative_to(root).as_posix(),'sha256':sha(p),'bytes':p.stat().st_size}
-                 for p in sorted(root.rglob('*')) if p.is_file() and p.name!='return-manifest.json']}
+        'files':make_file_binding(root,paths)}
 
 
 def verify_manifest(root,manifest):
     root=Path(root).resolve()
-    for f in manifest['files']:
-        rel=f['path']
-        if any(c in rel for c in ('\\',':','\x00')) or any(p in ('','..','.') for p in rel.split('/')):
-            raise ValueError('UNSAFE_RETURN_PATH')
-        p=(root/rel).resolve()
-        if not p.is_relative_to(root):
-            raise ValueError('UNSAFE_RETURN_PATH')
-        if not p.is_file():
-            raise ValueError('RETURN_FILE_MISSING: '+rel)
-        if sha(p)!=f['sha256']:
-            raise ValueError('RETURN_SHA_MISMATCH: '+rel)
+    manifest_path=root/'return-manifest.json'
+    if manifest_path.is_symlink(): raise ValueError('SYMLINK_RETURN_MANIFEST')
+    actual={p.relative_to(root).as_posix() for p in root.rglob('*')
+            if p.is_file() and p!=manifest_path}
+    verify_file_binding(root,manifest.get('files'),actual)
 
 
 def preview_pdf(pdf:Path,out:Path) -> dict:

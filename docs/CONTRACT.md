@@ -83,12 +83,17 @@ JSON Schema는 `schemas/press_input_v0.1.schema.json`이다. 스키마 검증은
 `files[{path,sha256,bytes}]`를 담는다. 자신을 제외한 모든 파일을 raw-byte SHA로 묶고,
 ZIP 자체 해시는 외부 `.zip.sha256`에 적는다. `student/`는 학생용 HWPX/PDF,
 `teacher/`는 정답·해설, `preview/`는 실제 PDF의 전 페이지 PNG이다.
+검증기는 파일 경로의 중복과 탈출, 파일 누락·추가, 크기와 SHA-256 불일치를 모두
+거부한다. build에서 복사한 `runtime.json`과 `reproduction/`도 별도 결합하여 seal 전
+변경을 차단한다.
 
 `visual-receipt.json`은 기존 Forge `integrated-social-visual-receipt-v1`을 그대로
 준수한다. `status=COMPLETE`는 18개 파일 반환 범위 완료만 뜻한다. `press_commit`은
 실제 로컬 코드 커밋이며 `visual-artifacts.json` 경로의 기준 루트는 `figures/`다.
 `visual-result.json`은 추가 로컬 편집 정보로, 각 삽입 PNG와 exact source lines를
 영수증의 같은 `(item_id,data_id)` 및 명세와 결합한다. 파일 해시와 의미 검토는 별개다.
+`font_provenance`는 개별 figure spec에 기록된 파일명·family·style·SHA-256 집합과
+정확히 같아야 한다.
 
 학생 본문에서 도판으로 대체한 범위는 명세의 `core_variables.lines`와 정확히
 같아야 하며 해당 PNG 바이트가 HWPX BinData에 존재해야 한다. 그 밖의 발문·자료

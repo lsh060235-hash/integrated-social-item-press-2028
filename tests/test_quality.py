@@ -155,13 +155,32 @@ def test_ambiguous_source_lines_require_an_explicit_occurrence():
 def test_sealed_plan_must_match_the_build_hash(tmp_path):
     import press_revision as revision
     path=tmp_path/'visual-plan.json';path.write_text('{}',encoding='utf-8')
+    runtime=tmp_path/'runtime.json';runtime.write_text('{}',encoding='utf-8')
     check=getattr(revision,'verify_saved_plan',None)
     assert callable(check)
-    (tmp_path/'verification.json').write_text(json.dumps({'visual_plan_sha256':verify.sha(path)}))
+    (tmp_path/'verification.json').write_text(json.dumps({
+        'visual_plan_sha256':verify.sha(path),
+        'reproduction_files':verify.make_file_binding(tmp_path,[runtime]),
+    }))
     check(tmp_path)
     path.write_text('{"changed":true}')
     with pytest.raises(ValueError,match='VISUAL_PLAN_CHANGED'):
         check(tmp_path)
+
+
+def test_seal_rejects_changed_build_reproduction(tmp_path):
+    import press_revision as revision
+    plan=tmp_path/'visual-plan.json';plan.write_text('{}',encoding='utf-8')
+    runtime=tmp_path/'runtime.json';runtime.write_text('{"press_commit":"abc"}',encoding='utf-8')
+    source=tmp_path/'reproduction'/'press.py';source.parent.mkdir();source.write_text('original',encoding='utf-8')
+    (tmp_path/'verification.json').write_text(json.dumps({
+        'visual_plan_sha256':verify.sha(plan),
+        'reproduction_files':verify.make_file_binding(tmp_path,[runtime,source]),
+    }))
+    revision.verify_saved_plan(tmp_path)
+    source.write_text('changed',encoding='utf-8')
+    with pytest.raises(ValueError,match='SHA'):
+        revision.verify_saved_plan(tmp_path)
 
 
 def test_explicit_pair_labels_become_a_header_row(tmp_path):

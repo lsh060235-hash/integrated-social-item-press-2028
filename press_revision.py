@@ -16,19 +16,8 @@ from press_contract import _forge_api, ContractError
 ROOT=Path(__file__).resolve().parent
 
 
-def visual_font_manifest(result):
-    fonts=result.get('font_provenance')
-    if not isinstance(fonts,list) or not fonts:
-        raise ContractError('VISUAL_FONT_PROVENANCE_MISSING')
-    required={'name','family','style','sha256','purpose'}
-    if any(set(font)!=required or font['purpose']!='visuals' or
-           re.fullmatch(r'[0-9a-f]{64}',font['sha256']) is None for font in fonts):
-        raise ContractError('VISUAL_FONT_PROVENANCE_INVALID')
-    return [dict(font) for font in fonts]
-
-
 def verify_saved_plan(out):
-    from press_verify import sha
+    from press_verify import sha,verify_file_binding
     out=Path(out)
     verification=json.loads((out/'verification.json').read_text(encoding='utf-8'))
     if sha(out/'visual-plan.json')!=verification.get('visual_plan_sha256'):
@@ -37,6 +26,9 @@ def verify_saved_plan(out):
     if editorial.exists() or verification.get('solution_editorial_sha256'):
         if not editorial.is_file() or sha(editorial)!=verification.get('solution_editorial_sha256'):
             raise ContractError('SOLUTION_EDITORIAL_CHANGED_AFTER_BUILD')
+    provenance=[out/'runtime.json']+[path for path in (out/'reproduction').rglob('*') if path.is_file()]
+    expected={path.relative_to(out).as_posix() for path in provenance}
+    verify_file_binding(out,verification.get('reproduction_files'),expected)
 
 
 def forge_provenance(forge_root):
@@ -183,7 +175,8 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     from press_layout import build_hwpx,render_hangul
     from press_visuals import build_revision_visuals,make_visual_plan,compile_visual_plan
     from press_verify import (verify_exam,preview_pdf,validate_visual_result,missing_units,sha,
-                              build_item_review,balance_last_column)
+                              build_item_review,balance_last_column,make_file_binding,
+                              visual_font_manifest)
     import fitz
     from press_solutions import apply_editorial,verify_solutions
     packet=load_revision(archive,forge_root)
@@ -278,7 +271,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         'packages':{name:version(name) for name in ('python-hwpx','Pillow','PyMuPDF','jsonschema')},
         'forge_commit':provenance['commit'],'forge_dirty':provenance['dirty'],
         'forge_source_files':[],'fonts':[]}
-    runtime['fonts'].extend(visual_font_manifest(result))
+    runtime['fonts'].extend(visual_font_manifest(result,out/'figures'))
     paths=list((Path(forge_root)/'src').rglob('*.py'))+list((Path(forge_root)/'schemas').rglob('*.json'))
     for path in sorted(paths):
         relative=path.relative_to(forge_root)
@@ -290,6 +283,8 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         path=Path('C:/Windows/Fonts')/name
         if path.is_file(): runtime['fonts'].append({'name':name,'sha256':sha(path)})
     write_json(out/'runtime.json',runtime)
+    provenance=[out/'runtime.json']+[path for path in (out/'reproduction').rglob('*') if path.is_file()]
+    verification['reproduction_files']=make_file_binding(out,provenance)
     write_json(out/'verification.json',verification)
     print('DRAFT BUILT: all pages require visual review before seal.',flush=True)
 
