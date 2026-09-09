@@ -40,6 +40,28 @@ def test_asymmetric_choice_widths_fall_back_to_vertical_layout(tmp_path):
                for marker, choice in zip(layout.CIRCLED, data['items'][0]['student_view']['choices']))
 
 
+def test_long_paired_choices_fall_back_to_vertical_layout(tmp_path):
+    data = packet()
+    choices = [
+        'A시가 B시에 60만 원 / A시가 B시에 30만 원',
+        'B시가 A시에 60만 원 / B시가 A시에 30만 원',
+        'B시가 A시에 80만 원 / A시가 B시에 30만 원',
+        'B시가 A시에 60만 원 / A시가 B시에 30만 원',
+        'B시가 A시에 60만 원 / A시가 B시에 20만 원',
+    ]
+    data['items'][0]['student_view']['choices'] = choices
+
+    path = layout.build_hwpx(data, tmp_path / 'long-paired.hwpx')
+
+    with zipfile.ZipFile(path) as z:
+        root = ET.fromstring(z.read('Contents/section0.xml'))
+    table = root.find('.//hp:tbl[@rowCnt="5"][@colCnt="3"]', NS)
+    assert table is None, 'Long paired labels must not wrap into reordered table columns'
+    text = ''.join(t.text or '' for t in root.findall('.//hp:t', NS))
+    assert all(marker + ' ' + choice in text
+               for marker, choice in zip(layout.CIRCLED, choices))
+
+
 def request():
     content = '설명\n| 시점 | 값 |\n| 2030 | 10 |'
     return {'campaign_id': 'FRG-SOC-2028-M03', 'requests': [{

@@ -159,6 +159,12 @@ def _paired_choices(doc, choices, chars, paras, conditions=()):
     parts=[re.fullmatch(r'(.+?)\s+(—|/)\s+(.+)',c) for c in choices]
     if not all(parts) or max(map(len,choices))>30:
         return False
+    width=lambda text: (sum(2 if unicodedata.east_asian_width(c) in 'WFA' else 1
+                            for c in text)*BODY_SIZE/2+8)
+    side_width=76*0.45*72/25.4
+    if any(max(width(CIRCLED[n]+' '+match[1]),width(match[3]))>side_width
+           for n,match in enumerate(parts)):
+        return False
     rows=[[CIRCLED[n]+' '+m[1],m[2],m[3]] for n,m in enumerate(parts)]
     headers=[]
     for condition in conditions:
