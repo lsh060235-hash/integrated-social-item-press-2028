@@ -51,7 +51,7 @@ validate_packet(packet, forge)
 조건 내용만 바꿀 수 있다. 발문·선택지·정답·교사용 근거와 시각 자료로 선택된
 원문 줄은 바꿀 수 없다.
 표현 교정으로 지면 흐름이 달라질 때 Press는 표의 원문 줄을 모두 해시에 결박한
-`render-visual-handoff.json`을 만들고 표를 검증된 그림으로 치환할 수 있다. 이 파일은
+`render-visual-plan.json`과 `render-visual-handoff.json`을 만들고 표를 검증된 그림으로 치환할 수 있다. `visual-plan.json`은 원본 Forge 핸드오프에 다시 입력할 수 있는 계획으로 유지한다. 두 렌더 파일은
 Forge의 원본 `visual_handoff`를 대체하지 않으며 해당 제작본의 렌더링 근거로만 쓴다.
 `item_revision`은 원문에 `item_version`이 있으면 그 값을, 그다음 `version` 값을
 사용하며 둘 다 없으면 `source_item_sha256`을 content-addressed revision으로

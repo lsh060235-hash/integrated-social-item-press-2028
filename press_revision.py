@@ -104,12 +104,27 @@ def augment_student_table_visuals(packet,production_packet,plan):
     return request,result_plan
 
 
+def write_visual_specs(out,source_plan,render_handoff,render_plan,student_editorial):
+    """Keep the reusable source plan separate from editorial render inputs."""
+    from press import write_json
+    out=Path(out)
+    write_json(out/'visual-plan.json',source_plan)
+    if student_editorial is not None:
+        write_json(out/'render-visual-plan.json',render_plan)
+        write_json(out/'render-visual-handoff.json',render_handoff)
+
+
 def verify_saved_plan(out):
     from press_verify import sha,verify_file_binding
     out=Path(out)
     verification=json.loads((out/'verification.json').read_text(encoding='utf-8'))
     if sha(out/'visual-plan.json')!=verification.get('visual_plan_sha256'):
         raise ContractError('VISUAL_PLAN_CHANGED_AFTER_BUILD')
+    render_plan=out/'render-visual-plan.json'
+    if render_plan.exists() or verification.get('render_visual_plan_sha256'):
+        if (not render_plan.is_file()
+            or sha(render_plan)!=verification.get('render_visual_plan_sha256')):
+                raise ContractError('RENDER_VISUAL_PLAN_CHANGED_AFTER_BUILD')
     editorial=out/'solution-editorial.json'
     if editorial.exists() or verification.get('solution_editorial_sha256'):
         if not editorial.is_file() or sha(editorial)!=verification.get('solution_editorial_sha256'):
@@ -286,14 +301,16 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     editorial=json.loads(Path(solution_overlay).read_text(encoding='utf-8-sig')) if solution_overlay else None
     teacher_packet=(apply_editorial(production_packet,editorial)
                     if editorial is not None else production_packet)
-    plan=(json.loads(Path(visual_plan).read_text(encoding='utf-8-sig')) if visual_plan else
-          make_visual_plan(packet['visual_handoff']))
-    compile_visual_plan(packet['visual_handoff'],plan)
+    source_plan=(json.loads(Path(visual_plan).read_text(encoding='utf-8-sig')) if visual_plan else
+                 make_visual_plan(packet['visual_handoff']))
+    compile_visual_plan(packet['visual_handoff'],source_plan)
     render_handoff=packet['visual_handoff']
+    render_plan=source_plan
     if student_editorial is not None:
-        render_handoff,plan=augment_student_table_visuals(packet,production_packet,plan)
-        compile_visual_plan(render_handoff,plan)
-    validate_student_editorial_visuals(production_packet,plan)
+        render_handoff,render_plan=augment_student_table_visuals(
+            packet,production_packet,source_plan)
+        compile_visual_plan(render_handoff,render_plan)
+    validate_student_editorial_visuals(production_packet,render_plan)
     render_packet=copy.deepcopy(production_packet)
     render_packet['visual_handoff']=render_handoff
     out=Path(out).resolve()
@@ -310,10 +327,8 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     write_json(out/'input-packet.json',packet)
     if student_editorial is not None: write_json(out/'student-editorial.json',student_editorial)
     if editorial is not None: write_json(out/'solution-editorial.json',editorial)
-    write_json(out/'visual-plan.json',plan)
-    if render_handoff!=packet['visual_handoff']:
-        write_json(out/'render-visual-handoff.json',render_handoff)
-    result=build_revision_visuals(render_handoff,out/'figures',commit,plan)
+    write_visual_specs(out,source_plan,render_handoff,render_plan,student_editorial)
+    result=build_revision_visuals(render_handoff,out/'figures',commit,render_plan)
     write_json(out/'visual-result.json',result)
     write_json(out/'visual-handoff.json',packet['visual_handoff'])
     write_json(out/'visual-receipt.json',result['receipt'])
@@ -322,7 +337,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     render={}
     # Exercise two distinct visible figure families when possible.
     pilot_numbers=[]; modes=set()
-    for figure in plan['figures']:
+    for figure in render_plan['figures']:
         number=int(figure['item_id'].rsplit('Q',1)[1])
         if figure['mode'] not in modes and number not in pilot_numbers:
             pilot_numbers.append(number); modes.add(figure['mode'])
@@ -375,6 +390,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     if editorial is not None: verification['solution_editorial_sha256']=sha(out/'solution-editorial.json')
     if student_editorial is not None:
         verification['student_editorial_sha256']=sha(out/'student-editorial.json')
+        verification['render_visual_plan_sha256']=sha(out/'render-visual-plan.json')
         verification['render_visual_handoff_sha256']=sha(out/'render-visual-handoff.json')
     reference=None
     if reference_pdf:
@@ -418,7 +434,9 @@ def seal_revision(archive,forge_root,out):
     production_packet=(apply_student_editorial(
         packet,json.loads(student_editorial.read_text(encoding='utf-8')))
         if student_editorial.exists() else packet)
-    plan=json.loads((out/'visual-plan.json').read_text(encoding='utf-8'))
+    render_plan_file=out/'render-visual-plan.json'
+    plan=json.loads((render_plan_file if render_plan_file.exists() else
+                     out/'visual-plan.json').read_text(encoding='utf-8'))
     validate_student_editorial_visuals(production_packet,plan)
     editorial=out/'solution-editorial.json'
     teacher_packet=(apply_editorial(

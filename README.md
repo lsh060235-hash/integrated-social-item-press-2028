@@ -34,7 +34,7 @@ python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-r
 M01 r7·M02 r1 및 최신 M01 language-v2-r1·M02 language-v2-r2·M03 v4의 검토된 도식 설정을 기본 제공한다. 원문 해시가 달라지면 이전 줄 번호를 적용하지 않는다. 새 회차·수정 자료는 설정을 내보내고 mode, lines, replace를 검토한 뒤 제작한다.
 
 사용자가 특정 제작본의 학생 자료 표현 교정을 명시적으로 요청한 경우 `--student-overlay`로 원문 해시에 결합된 조건별 교정 JSON을 적용할 수 있다. 원본 `input-packet.json`은 유지하고 적용본을 `student-editorial.json`에 보관한다. 발문·선택지·정답은 이 경로로 바꿀 수 없다.
-표현 교정으로 지면 흐름이 달라지는 경우 표 자료는 원문 줄과 해시에 결합된 검증용 그림으로 렌더링하여 한컴의 단 배치에 따른 셀 누락을 막는다.
+표현 교정으로 지면 흐름이 달라지는 경우 표 자료는 원문 줄과 해시에 결합된 검증용 그림으로 렌더링하여 한컴의 단 배치에 따른 셀 누락을 막는다. 이때 재입력 가능한 원본 계획은 `visual-plan.json`에 유지하고, 교정본 렌더에 실제 사용한 증강 계획과 핸드오프는 `render-visual-plan.json`, `render-visual-handoff.json`에 각각 저장하여 봉인 시 함께 검증한다.
 
 ```powershell
 python -X utf8 press_revision.py plan --archive 'C:/input/review.zip' --forge-root 'C:/path/to/forge' --out work/visual-plan.json

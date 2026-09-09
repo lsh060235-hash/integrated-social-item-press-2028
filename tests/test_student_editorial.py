@@ -200,3 +200,55 @@ def test_seal_rejects_student_editorial_changed_after_build(tmp_path):
     editorial.write_text('{"changed":true}', encoding="utf-8")
     with pytest.raises(ValueError, match="STUDENT_EDITORIAL_CHANGED_AFTER_BUILD"):
         press_revision.verify_saved_plan(tmp_path)
+
+
+def test_visual_specs_keep_replay_plan_and_always_write_overlay_render_pair(tmp_path):
+    source_handoff = {"requests": []}
+    source_plan = {"figures": []}
+    render_handoff = {"requests": [{"item_id": "Q01"}]}
+    render_plan = {"figures": [{"item_id": "Q01"}]}
+
+    press_revision.write_visual_specs(
+        tmp_path,
+        source_plan,
+        render_handoff,
+        render_plan,
+        student_editorial={"conditions": []},
+    )
+
+    assert json.loads((tmp_path / "visual-plan.json").read_text()) == source_plan
+    assert json.loads((tmp_path / "render-visual-plan.json").read_text()) == render_plan
+    assert json.loads((tmp_path / "render-visual-handoff.json").read_text()) == render_handoff
+
+
+def test_visual_specs_omit_render_pair_without_student_overlay(tmp_path):
+    handoff = {"requests": []}
+    plan = {"figures": []}
+
+    press_revision.write_visual_specs(
+        tmp_path, plan, handoff, plan, student_editorial=None
+    )
+
+    assert json.loads((tmp_path / "visual-plan.json").read_text()) == plan
+    assert not (tmp_path / "render-visual-plan.json").exists()
+    assert not (tmp_path / "render-visual-handoff.json").exists()
+
+
+def test_seal_rejects_render_visual_plan_changed_after_build(tmp_path):
+    plan = tmp_path / "visual-plan.json"
+    plan.write_text("{}", encoding="utf-8")
+    render_plan = tmp_path / "render-visual-plan.json"
+    render_plan.write_text("{}", encoding="utf-8")
+    runtime = tmp_path / "runtime.json"
+    runtime.write_text("{}", encoding="utf-8")
+    verification = {
+        "visual_plan_sha256": press_verify.sha(plan),
+        "render_visual_plan_sha256": press_verify.sha(render_plan),
+        "reproduction_files": press_verify.make_file_binding(tmp_path, [runtime]),
+    }
+    (tmp_path / "verification.json").write_text(json.dumps(verification), encoding="utf-8")
+    press_revision.verify_saved_plan(tmp_path)
+
+    render_plan.write_text('{"changed":true}', encoding="utf-8")
+    with pytest.raises(ValueError, match="RENDER_VISUAL_PLAN_CHANGED_AFTER_BUILD"):
+        press_revision.verify_saved_plan(tmp_path)
