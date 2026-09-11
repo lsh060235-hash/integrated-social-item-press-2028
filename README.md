@@ -49,6 +49,8 @@ python -X utf8 press_revision.py build --archive 'C:/input/review.zip' --forge-r
 
 ## 문항별 형식 대조
 
+자료 활용과 문항 구조는 [별도 검수 기준](docs/ITEM_STRUCTURE_REVIEW.md)에 따라 대조한다. 문장 카드의 이미지 검증이나 파일 봉인 성공은 평가원 문항 구조의 동등성을 입증하지 않는다. M04 v4의 통신망·강변·시설 이용·교류 이력은 원문 해시에 결합한 전용 도식을 지원한다.
+
 build는 25문항 전체 이미지, PDF 해시, 위치·높이와 검토 항목을 item-review에 만든다. 사용자 보유 공식 예시문항 PDF를 지정하면 문항별 나란히 비교 화면도 만든다.
 
 ```powershell

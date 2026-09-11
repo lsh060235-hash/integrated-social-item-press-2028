@@ -632,6 +632,39 @@
         4
       ],
       "replace": true
+    },
+    "FRG-SOC-2028-M04-Q09|MAP-A|4587d5d1bdc17e379033220d091b8aaec44de89df630fc8e25620a4bef3dedb8": {
+      "source_content_sha256": "4587d5d1bdc17e379033220d091b8aaec44de89df630fc8e25620a4bef3dedb8",
+      "mode": "revision_resilient_network",
+      "indices": [
+        0
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M04-Q12|MAP-A|d00477f4b1b8715c613b66b956f2c207c5d9e3ff8aea4df9be9fdd34eb269d05": {
+      "source_content_sha256": "d00477f4b1b8715c613b66b956f2c207c5d9e3ff8aea4df9be9fdd34eb269d05",
+      "mode": "revision_river_access",
+      "indices": [
+        1
+      ],
+      "replace": true
+    },
+    "FRG-SOC-2028-M04-Q13|MAP-A|c3efe51777642f16138684074bbc8ddde1ae22db9655ded48d0c6b0f1723612b": {
+      "source_content_sha256": "c3efe51777642f16138684074bbc8ddde1ae22db9655ded48d0c6b0f1723612b",
+      "mode": "revision_care_flows",
+      "indices": [
+        0
+      ],
+      "replace": false
+    },
+    "FRG-SOC-2028-M04-Q23|MAP-B|464e097e19e2072a724596514c1ab8af414cdf56e290428fa60a76f4a34c120e": {
+      "source_content_sha256": "464e097e19e2072a724596514c1ab8af414cdf56e290428fa60a76f4a34c120e",
+      "mode": "revision_exchange_map",
+      "indices": [
+        0,
+        1
+      ],
+      "replace": false
     }
   }
 }

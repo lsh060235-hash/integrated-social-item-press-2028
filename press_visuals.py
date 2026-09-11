@@ -90,7 +90,7 @@ def compile_visual_plan(request, plan):
            'revision_coordinates','revision_transit','revision_service','revision_culture',
            'revision_paired_culture','revision_temperature','revision_commute','revision_border',
            'revision_region','revision_trade','revision_history','revision_sites',
-           'revision_population','revision_power'}
+           'revision_population','revision_power'} | _M04_MODES
     rules={}
     audited=json.loads((Path(__file__).parent/'profiles/revision-defaults.json').read_text(encoding='utf-8'))['figures'].values()
     for pair,figure in zip(pairs,figures):
@@ -143,6 +143,8 @@ def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit
 
 def _revision_topology(mode: str, lines: list[str]) -> dict[str, Any]:
     content = "\n".join(lines)
+    if mode in _M04_MODES:
+        return _m04_topology(mode, lines)
     if mode in _M03_MODES:
         return _m03_topology(mode, lines)
     if mode == "revision_flood":
@@ -214,6 +216,8 @@ def _arrow_ops(x1, y1, x2, y2):
 
 
 def _revision_ops(mode, topology, font):
+    if mode in _M04_MODES:
+        return _m04_ops(mode, topology, font)
     if mode in _M03_MODES:
         return _m03_ops(mode, topology, font)
     ops = []
@@ -1107,6 +1111,109 @@ def _build_visuals(request, out_root, press_commit, rules):
     }
 
 # Source-specific topology renderers remain gated by the audited hash/selector registry.
+_M04_MODES = {'revision_' + name for name in (
+    'resilient_network', 'river_access', 'care_flows', 'exchange_map')}
+
+
+def _m04_topology(mode, lines):
+    # These grammars are source-specific; compile_visual_plan also binds the
+    # complete source hash, selected lines and replacement policy to the registry.
+    content = '\n'.join(lines)
+    if mode == 'revision_resilient_network':
+        edges = [list(pair) for pair in re.findall(r'([MPQRS])—([MPQRS])', content)]
+        if edges == [['M', 'P'], ['M', 'Q'], ['P', 'R'], ['Q', 'R'], ['R', 'S']]:
+            return {'type': 'undirected_network', 'edges': edges}
+    elif mode == 'revision_river_access':
+        if '서쪽 강변: 거주지 P·기존 신고소 ║ 하천 ║ 동쪽 강변: 거주지 Q' in content:
+            return {'type': 'river_banks', 'west': ['P', '기존 신고소'],
+                    'east': ['Q'], 'crossings': []}
+    elif mode == 'revision_care_flows':
+        groups = re.findall(r'([PQ]) 이용자는 A시 주민 (\d+)명·B시 주민 (\d+)명', content)
+        if 'P시설은 A시, Q시설은 B시에 있다' in content and [g[0] for g in groups] == ['P', 'Q']:
+            return {'type': 'care_flows', 'facilities': {'P': 'A', 'Q': 'B'},
+                    'flows': [[city, facility, int(count)] for facility, a, b in groups
+                              for city, count in [('A', a), ('B', b)]]}
+    elif mode == 'revision_exchange_map':
+        routes = [list(route) for route in re.findall(
+            r'([XY])의 제작 구역 ([KJ]) → 현재 보관 구역 ([KJ])', content)]
+        if ('서쪽의 한반도 구역 K' in content and '동쪽의 일본 열도 구역 J' in content
+                and routes == [['X', 'J', 'J'], ['Y', 'J', 'K']]):
+            return {'type': 'production_and_storage', 'west': 'K', 'east': 'J', 'routes': routes}
+    raise VisualBuildError('MAP_TOPOLOGY_UNREADABLE: ' + mode)
+
+
+def _m04_ops(mode, topology, font):
+    ops = []
+
+    def text(x, y, label, attrs=None):
+        ops.append(('text', x, y, label, attrs or {}))
+
+    def centered(x, y, label):
+        text(x - font.getlength(label) / 2, y, label)
+
+    def node(x, y, label):
+        width = max(110, font.getlength(label) + 40)
+        ops.append(('rect', x - width / 2, y - 35, x + width / 2, y + 35, 3))
+        centered(x, y - 25, label)
+
+    if mode == 'revision_resilient_network':
+        positions = {'M': (130, 240), 'P': (440, 85), 'Q': (440, 395),
+                     'R': (820, 240), 'S': (1180, 240)}
+        for a, b in topology['edges']:
+            ops.append(('line', *positions[a], *positions[b], 3, {'data-edge': a + '-' + b}))
+        for label, (x, y) in positions.items():
+            node(x, y, label)
+        centered(660, 455, '선: 양방향 통신 연결 (거리/속도와 무관)')
+        return 525, ops
+    if mode == 'revision_river_access':
+        ops.extend([('line', 600, 90, 600, 330, 3), ('line', 730, 90, 730, 330, 3)])
+        centered(300, 20, '서쪽 강변')
+        centered(1020, 20, '동쪽 강변')
+        centered(665, 165, '하천')
+        node(300, 155, '거주지 ' + topology['west'][0])
+        node(300, 270, topology['west'][1])
+        node(1020, 155, '거주지 ' + topology['east'][0])
+        return 365, ops
+    if mode == 'revision_care_flows':
+        # Separate facility panels avoid crossing arrows and any derived totals.
+        xs = {'A': 310, 'B': 1010}
+        for panel, facility in enumerate(('P', 'Q')):
+            top = 20 + panel * 380
+            for city, x in xs.items():
+                centered(x, top, city + '시')
+            ops.append(('line', 660, top + 60, 660, top + 345, 2))
+            end_x = xs[topology['facilities'][facility]]
+            for origin, destination, count in topology['flows']:
+                if destination != facility:
+                    continue
+                start_x = xs[origin]
+                arrow = _arrow_ops(start_x, top + 140, end_x, top + 270)
+                arrow[0] += ({'data-flow': origin + '-' + destination, 'data-count': str(count)},)
+                ops.extend(arrow)
+                # Place counts near the origin, clear of both arrow segments.
+                text(start_x + 95 if start_x == end_x else start_x - 55,
+                     top + 155, str(count) + '명')
+                node(start_x, top + 105, origin + '시 주민')
+            node(end_x, top + 305, facility + '시설')
+        centered(660, 790, '선: 행정 경계 / 화살표: 시설 이용')
+        return 860, ops
+    if mode == 'revision_exchange_map':
+        centered(270, 20, '서쪽: 한반도 K')
+        centered(1040, 20, '동쪽: 일본 열도 J')
+        ops.extend([('line', 535, 90, 535, 410, 3), ('line', 790, 90, 790, 410, 3)])
+        centered(660, 105, '바다')
+        # X has no inter-region movement; no arrow is invented for it.
+        centered(1040, 180, 'X: J에서 제작/보관')
+        arrow = _arrow_ops(1000, 320, 310, 320)
+        arrow[0] += ({'data-route': 'Y:J-K'},)
+        ops.extend(arrow)
+        centered(1040, 245, 'Y 제작')
+        centered(270, 245, 'Y 현재 보관')
+        centered(660, 435, '상대적 위치와 이력 (거리/면적과 무관)')
+        return 505, ops
+    raise VisualBuildError('UNSUPPORTED_RENDER_MODE: ' + mode)
+
+
 _M03_MODES = {'revision_'+name for name in ('paired_culture','temperature','commute',
     'border','region','trade','history','sites','population','power')}
 
