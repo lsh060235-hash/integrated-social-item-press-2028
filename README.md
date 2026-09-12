@@ -25,6 +25,20 @@ python -X utf8 -m pytest --integration -q
 
 ## 시험지 제작
 
+`2026-09-12-applied`의 M01~M04 `*-editorial-20260912-r1.zip`은 검수 패킷이 없는 **미승인 편집 초안**이다. 기존 검수 ZIP 경로는 manifest·상태·125패킷 조건을 그대로 요구한다. 이 네 원본은 `--input-kind editorial-draft`를 명시해야 하며, Press에 기록된 ZIP 전체·파일별 SHA-256과 네 JSON의 회차·문항·배점·학생뷰 대응을 검사한다. ZIP 안의 상태 설명은 출간 승인 증거로 쓰지 않는다. 정확히 바이트가 일치하는 네 ZIP 외에는 이 경로가 수용하지 않는다.
+
+```powershell
+$archive = '../integrated-social-item-forge/deliveries/2026-09-12-applied/M04-editorial-20260912-r1.zip'
+python -X utf8 press_revision.py plan --input-kind editorial-draft --archive $archive --out work/M04-plan.json
+# plan의 자료 관계·원문 줄·수치·범례를 확인하고 mode/lines/replace를 채운다.
+python -X utf8 press_revision.py build --input-kind editorial-draft --archive $archive --visual-plan work/M04-plan.json --out work/M04-draft
+# 학생용·교사용 PDF 전쪽 및 문항을 확인해 agent-page-review.json을 작성한다.
+python -X utf8 press_revision.py seal --input-kind editorial-draft --archive $archive --out work/M04-draft
+python -X utf8 press_revision.py verify --out work/M04-draft
+```
+
+이 입력은 `input_integrity=PASS`와 `content_status=NOT_REVIEWED`를 분리한다. M02~M04의 `CURRICULUM_COVERAGE` HOLD와 원본이 지적한 어투 단서는 남는다. 제작물은 `DRAFT_FOR_HUMAN_REVIEW`이며 `human_release_approval`은 비어 있다. 도판 파일 해시, 조판 검증, 기술적 봉인은 의미·정답 검수나 Forge→Press 1.1 공식 출고 지원을 뜻하지 않는다. Forge의 통합사회 지원 판정은 `UNSUPPORTED` 그대로 기록한다.
+
 실제 PDF 제작에는 Windows, 한컴오피스 한글 COM, FilePathCheckerModule, 함초롬바탕·맑은 고딕·바탕 글꼴이 필요하다. 입력 경로는 자신의 파일로 바꾼다. **제작 코드는 커밋되어 있어야 하며 출력 폴더는 새 경로여야 한다.**
 
 ```powershell

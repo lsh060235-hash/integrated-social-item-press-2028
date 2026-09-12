@@ -1,0 +1,93 @@
+{
+  "schema_version": "press-editorial-draft-sources-v1",
+  "manual_review_notes": {
+    "FRG-SOC-2028-M01": [
+      {"item_id": "FRG-SOC-2028-M01-Q15", "issue": "정답이 자료의 ‘유지/새 의무’ 표현과 직접 대응한다는 어투 단서", "source": "READ_FIRST.md", "status": "UNRESOLVED"},
+      {"scope": "나머지 24문항", "issue": "새 독립 전수 검수와 저자 근거의 내용 검수 미완료", "source": "READ_FIRST.md", "status": "PENDING"}
+    ],
+    "FRG-SOC-2028-M02": [
+      {"item_id": "FRG-SOC-2028-M02-Q18", "issue": "정답이 자료 속 정의·사례와 직접 대응해 쉽게 드러난다는 어투 단서", "source": "READ_FIRST.md", "status": "UNRESOLVED"},
+      {"scope": "나머지 24문항", "issue": "새 독립 전수 검수와 저자 근거의 내용 검수 미완료", "source": "READ_FIRST.md", "status": "PENDING"}
+    ],
+    "FRG-SOC-2028-M03": [
+      {"item_id": "FRG-SOC-2028-M03-Q04", "issue": "정답만 양측 관점을 균형 있게 요약해 빨리 드러난다는 어투 단서", "source": "READ_FIRST.md", "status": "UNRESOLVED"},
+      {"scope": "나머지 22문항", "issue": "새 독립 전수 검수와 저자 근거의 내용 검수 미완료", "source": "READ_FIRST.md", "status": "PENDING"}
+    ],
+    "FRG-SOC-2028-M04": [
+      {"item_id": "FRG-SOC-2028-M04-Q11", "issue": "정답만 신중한 한정 표현을 쓴다는 어투 단서", "source": "READ_FIRST.md", "status": "UNRESOLVED"},
+      {"item_id": "FRG-SOC-2028-M04-Q14", "issue": "정답이 원칙을 직접 재진술한다는 어투 단서", "source": "READ_FIRST.md", "status": "UNRESOLVED"},
+      {"item_id": "FRG-SOC-2028-M04-Q22", "issue": "정답이 원칙을 직접 재진술한다는 어투 단서", "source": "READ_FIRST.md", "status": "UNRESOLVED"},
+      {"scope": "나머지 22문항", "issue": "새 독립 전수 검수와 저자 근거의 내용 검수 미완료", "source": "READ_FIRST.md", "status": "PENDING"}
+    ]
+  },
+  "sources": {
+    "M01-editorial-20260912-r1.zip": {
+      "archive_sha256": "24e6c0d30720017426f161939eefa0ce9e6a79a7772fe21cead4b2cff2005d8d",
+      "members": {
+        "CHANGE_LOG.md": "344e0dde0016679b4bcda1a54592cd5d425e8410e8cabded29dfc6889fcb6e0f",
+        "READ_FIRST.md": "87110d70c41b1a88fcbd9c0a3f4dfe4970d6a34ad784f2e05daf1bbb9d0ace0c",
+        "RETRO_REVIEW.md": "f3413caa41526f18b0aade0be9b48351990fd68b84d5f7c624c73258ee81eb28",
+        "REVISION_DESIGN.md": "e14063429a19dfa7399bad66940559607b0737ab1dacd80ee523d0559b7c0561",
+        "STUDENT.md": "902fb45e508843336682844398170e80260f4e73408ea54fbac5ad22613b316d",
+        "TEACHER.md": "7ca218003b3c2bbf907461cec46a75f9f52f2ab572246574fc88589f05e78a26",
+        "VERIFICATION.md": "1162495c742ea4aa80a4bb34dd3761a54f7533274b73738cf98cfd5d26b7a71a",
+        "blueprint.json": "fa6b7205f96ce0d144bf5f27780aca1bb85ba915b4679907604c62ceaef383fc",
+        "item_specs.json": "9160f3d73c40167e9586d65e53fdb054d13b5d37da5ea0b41a5d7056b3b1c7ac",
+        "items.json": "bf80137d43ad29d12e02d17f44eaed27a97256e0212d6c523d4fbd757e78b254",
+        "student_items.json": "85bc072a07fa3fdb611870d73cf466c87d448b6b9c3fa5d44f14e6c1bd0c3cdf",
+        "verify.py": "b1e300934dbeb492bf0ed3a01257fca00b9b3104f39752b3df79a08ccd31a424"
+      }
+    },
+    "M02-editorial-20260912-r1.zip": {
+      "archive_sha256": "b50adb4c74c0c34e20c681f27c53ad137ddd52d7c3a6fce8c8d1c0ef9365a8a7",
+      "members": {
+        "CHANGE_LOG.md": "db8fcf718b01f72f6c1cfa4a3bc6b77d5800978351975b16406f9848179aba59",
+        "READ_FIRST.md": "ee36173e28551db6ef9a0e648bd4390e552de422bba41582c5bac4595ad0ac9e",
+        "RETRO_REVIEW.md": "e3fe0ee19f3d9b1783c111afca5d8814a36d0fd21c313de1d35c4ce432345544",
+        "REVISION_DESIGN.md": "25ae74a95b2bc13e7dcdd94b6604755b9b82f363e7e60c91c9ab5f72376e2783",
+        "STUDENT.md": "16463f248768279bb099325329e19d5ea97792262fed5d41899a75f635f77f10",
+        "TEACHER.md": "409c75fff25110d1f8db813a29b083ff9b635dc995474b938a915061f67f3b8d",
+        "blueprint.json": "cc1ae124b5d3ab90a7d0a1d1f2eeecf4c79252baccc3fa09499a3c49102486ce",
+        "item_specs.json": "587185b083d3e344560b987f794b65cbefb3dea63b00ff1543676d2b7b4a0bb7",
+        "items.json": "7691a1be40e1bca72df78eff29748509e9d07160df9e658e1daa173d933aeea8",
+        "student_items.json": "b490e101ad88a0e8fcef8bb3de842be78d6ea97f82f0c37c72e6861c03690a35",
+        "verify.py": "565f387a1ae907dbb21e49560e471dc53a34e94dedc066e8cbb2b327b5ac3155"
+      }
+    },
+    "M03-editorial-20260912-r1.zip": {
+      "archive_sha256": "2c9990e703ecae176bd27cd4423b2de25c3b694f6d1a8cd5b7465e35f57f9abe",
+      "members": {
+        "CHANGE_LOG.md": "516bea136d76214317f423f7c21d6f5f6e927c756271f6ae0cdbae1286a2edd9",
+        "READ_FIRST.md": "e7662e6a93ad5bd8df6e1265b6e8411a17ee705c37e0a786da44f193ab91c5e7",
+        "RETRO_REVIEW.md": "41fe06a67cca2fb360c9e71e4660a5c732ee80494bdbccb9e4a0ae8fca159f33",
+        "REVISION_DESIGN.md": "7ee317f3b83bc510db794a78dcc4e4c7f11d3fcd0a2b7e08be05d77bc51963d2",
+        "STUDENT.md": "bef9ec27ab87ebeeab5c25e572454151509a4c1a5ac60d3d84b101b7e3f0ff08",
+        "TEACHER.md": "7a29012f18d6ea90db2fb57fe36ab119df2dfeee2011283e74d5b46464ccbafb",
+        "VERIFICATION.json": "5119005272f455709e80156111eea1eabcc3ee9766d8f59bad50445f47da655f",
+        "blueprint.json": "723d744b9efab9ceb9192205a3c2c43ea7af3d54ab419028fb7c54307b6e2711",
+        "item_specs.json": "2273da798849f74f2b2c154474bdcd8e4a794c82aa84a0bb115dea0c5a6d014b",
+        "items.json": "626c043341a3999822f40e02ad1f342ce695c1ad9029a1131090a43cff34421b",
+        "materialize_and_verify.py": "e36f51dbe8674a3ac9d20f68fb0a7550ac083a22905b56ad2f8b1cec84150bab",
+        "student_items.json": "f9a248b0284c866aad5c8aba8cea82823526b1dac03cbb55e4e58fef84261bed"
+      }
+    },
+    "M04-editorial-20260912-r1.zip": {
+      "archive_sha256": "62dc1705ab2f983a6beff9cb0eb36760fb2dbd3c2dc0c817c2a0ce49c79574cd",
+      "members": {
+        "BLUEPRINT.md": "8e4796351cf769234c41bc5d30b11cba86547fb320f76b5ea41e1b32004aacdd",
+        "CHANGE_LOG.md": "7104628c013ae945be0f4fba20071d6cac83ba4b6a627ac54adab9b02177899b",
+        "READ_FIRST.md": "d9cbf8f3afc11a84bb6066949689ddfdd232bce0362ddbad6c5f3df41cacf61c",
+        "RETRO_REVIEW.md": "ed4265d980aceeb5fc551d0490bea18ba8bb043c83b35053fba188f6230ca5af",
+        "REVISION_DESIGN.md": "c226a594bbe5b0ad01b42d6212f6e26af93b6aadeb94819dca9ad96e7964b348",
+        "STUDENT.md": "953d825d7f01d083b7ad699530577909805da15a655d5c491ef9dcb781005bca",
+        "TEACHER.md": "568f0c94b9e045a34815ae33dd030be94ec41f8f9b3e62b66c933e832528fdde",
+        "blueprint.json": "21eaed8f3764a74cdd5f8b4cdd7595238c0bf75b440f2af155cf3a2c45e85703",
+        "item_specs.json": "0c3bf747cf01c5ee87f01b9f8f572a343cabf0d6cd5ab9f1c66f3e0aadfe5bd3",
+        "items.json": "2de60fb2da26e8216e739ff3690050609f3c0f3a7655a6113b630d8b1856f610",
+        "reference_alignment.json": "9834e74cbb612bb4f61b9ab21273f26b541b54908928bbfdb50c4ccdd7a4dc49",
+        "student_items.json": "73dcf1287e2c34d09ac0850ea2715064c172ac0ad1aa47aa524afc41137c71c9",
+        "verify.py": "4f79dc794a8931beeb60b381c5b94fce2ea7de9fad013afc3b63bf67f7653487"
+      }
+    }
+  }
+}

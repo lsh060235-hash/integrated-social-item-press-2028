@@ -18,6 +18,14 @@ def sha(path):
         return hashlib.file_digest(f,'sha256').hexdigest()
 
 
+def student_surface_leaks(text):
+    """Detect explicit answer/solution labels on a rendered student surface."""
+    patterns = (r'(?<![가-힣])정답\s*[:：]?\s*[①-⑤1-5](?!\d)',
+                r'\[\s*오답\s*피하기\s*\]',
+                r'(?<![가-힣])풀이\s*\d+\s*[.．]')
+    return [pattern for pattern in patterns if re.search(pattern, text)]
+
+
 def make_file_binding(root, paths):
     root=Path(root).resolve()
     files=[]
@@ -168,6 +176,10 @@ def verify_manifest(root,manifest):
     actual={p.relative_to(root).as_posix() for p in root.rglob('*')
             if p.is_file() and p!=manifest_path}
     verify_file_binding(root,manifest.get('files'),actual)
+    if (manifest.get('schema_version')!='integrated-social-press-return-v0.1' or
+        manifest.get('status')!='DRAFT_FOR_HUMAN_REVIEW' or
+        manifest.get('human_release_approval') is not None):
+        raise ValueError('RETURN_STATUS_INVALID')
 
 
 def preview_pdf(pdf:Path,out:Path) -> dict:
@@ -329,6 +341,8 @@ def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
     locations=[]; missing=[]; rendered_units=0; native_units=0; figure_pixels=[]
     with fitz.open(pdf) as doc:
         text='\n'.join(p.get_text() for p in doc)
+        if student_surface_leaks(native) or student_surface_leaks(text):
+            errors.append('STUDENT_ANSWER_OR_SOLUTION_EXPOSED')
         columns=[]
         for pn,page in enumerate(doc,1):
             if has_native_frame and not has_page_frame(page): errors.append('RENDERED_PAGE_FRAME_MISSING: '+str(pn))
@@ -401,7 +415,8 @@ def verify_exam(packet,hwpx,pdf,visual_result,artifact_root,item_numbers=None):
                                   'whole_item_same_column':same_column})
             for field in ('rationale',):
                 teacher=item.get('teacher',{}).get(field,'')
-                if teacher and normalized(teacher) in normalized(text):
+                if teacher and (normalized(teacher) in normalized(text)
+                                or normalized(teacher) in normalized(native)):
                     errors.append('TEACHER_TEXT_EXPOSED: '+item['item_id'])
         if [(i['page'],i['column']) for i in locations] != sorted((i['page'],i['column']) for i in locations):
             errors.append('READING_ORDER_INVALID')

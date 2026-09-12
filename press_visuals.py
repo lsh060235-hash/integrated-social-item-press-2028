@@ -132,11 +132,11 @@ def compile_visual_plan(request, plan):
 def build_revision_visuals(request: dict[str, Any], out_root: Path, press_commit: str, plan=None) -> dict[str, Any]:
     """Render the revised manuscripts, with prose maps inserted beside native text."""
     rules=compile_visual_plan(request,make_visual_plan(request) if plan is None else plan)
-    result = _build_visuals(request, out_root, press_commit, rules)
+    result = _build_visuals(request, out_root, press_commit, rules, additive=True)
     for entry in request["requests"]:
         pair = entry["item_id"], entry["data_id"]
         mode, indices, replace = rules[pair]
-        if mode.startswith("revision_") and not replace:
+        if not replace:
             result["display"]["|".join(pair)]["insert_before_line"] = entry["source_content"].splitlines()[indices[0]]
     return result
 
@@ -974,7 +974,7 @@ def build_visuals(request: dict[str, Any], out_root: Path, press_commit: str) ->
     return _build_visuals(request, out_root, press_commit, _RULES)
 
 
-def _build_visuals(request, out_root, press_commit, rules):
+def _build_visuals(request, out_root, press_commit, rules, additive=False):
 
     request_sha = _validate_request(request, press_commit, rules)
     root = Path(out_root).resolve()
@@ -1066,7 +1066,7 @@ def _build_visuals(request, out_root, press_commit, rules):
             "minimum_font_pt": _FONT_SIZE * 72 / _DPI,
             "color_mode": "black_and_white",
         }
-        if mode.startswith("revision_") and not replace:
+        if not replace and (additive or mode.startswith("revision_")):
             spec["insert_before_line"] = core_lines[0]
         spec_path = root / spec_rel
         spec_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

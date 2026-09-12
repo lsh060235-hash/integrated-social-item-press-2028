@@ -279,12 +279,22 @@ def load_revision(archive,forge_root):
             'visual_handoff_sha256':canonical_sha256(visual),
             'files':[{'path':n,'sha256':hashlib.sha256(data).hexdigest()} for n,data in sorted(members.items())]}}
 
-def validate_revision(packet,archive,forge_root):
-    if packet!=load_revision(archive,forge_root):
+def load_input(archive,forge_root,*,input_kind='reviewed'):
+    if input_kind=='reviewed':
+        return load_revision(archive,forge_root)
+    if input_kind=='editorial-draft':
+        from press_editorial_draft import load_editorial_draft
+        return load_editorial_draft(archive,forge_root)
+    raise ContractError('UNKNOWN_INPUT_KIND')
+
+def validate_revision(packet,archive,forge_root,*,input_kind='reviewed'):
+    if packet.get('binding',{}).get('input_kind','reviewed')!=input_kind:
+        raise ContractError('REVISION_PACKET_MISMATCH')
+    if packet!=load_input(archive,forge_root,input_kind=input_kind):
         raise ContractError('REVISION_PACKET_MISMATCH')
 
 def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,reference_map=None,
-                   solution_overlay=None,student_overlay=None):
+                   solution_overlay=None,student_overlay=None,input_kind='reviewed'):
     from press import write_json
     from press_layout import build_hwpx,render_hangul
     from press_visuals import build_revision_visuals,make_visual_plan,compile_visual_plan
@@ -293,7 +303,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
                               visual_font_manifest)
     import fitz
     from press_solutions import apply_editorial,verify_solutions
-    packet=load_revision(archive,forge_root)
+    packet=load_input(archive,forge_root,input_kind=input_kind)
     student_editorial=(json.loads(Path(student_overlay).read_text(encoding='utf-8-sig'))
                        if student_overlay else None)
     production_packet=(apply_student_editorial(packet,student_editorial)
@@ -381,7 +391,7 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
         print(packet['campaign_id'],group,render[group]['pages'],'pages PASS',flush=True)
     key='\n'.join(f"{i['number']}. {i['teacher']['answer']} ({i['points']:g}점)" for i in packet['items'])
     (out/'teacher/answer-key.txt').write_text(key+'\n',encoding='utf-8')
-    validate_revision(packet,archive,forge_root)
+    validate_revision(packet,archive,forge_root,input_kind=input_kind)
     verification=json.loads((out/'student/verification.json').read_text(encoding='utf-8'))
     verification.update({'render':render,'visual_file_check':bytes_report,'press_commit':commit,
         'source_status':packet['status'],'source_binding':packet['binding'],
@@ -421,14 +431,14 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     write_json(out/'verification.json',verification)
     print('DRAFT BUILT: all pages require visual review before seal.',flush=True)
 
-def seal_revision(archive,forge_root,out):
+def seal_revision(archive,forge_root,out,input_kind='reviewed'):
     from press import write_json
     from press_verify import verify_exam,validate_visual_result,make_manifest,verify_manifest,sha,validate_item_review
     import fitz
     out=Path(out).resolve()
     verify_saved_plan(out)
     packet=json.loads((out/'input-packet.json').read_text(encoding='utf-8'))
-    validate_revision(packet,archive,forge_root)
+    validate_revision(packet,archive,forge_root,input_kind=input_kind)
     from press_solutions import apply_editorial,verify_solutions
     student_editorial=out/'student-editorial.json'
     production_packet=(apply_student_editorial(
@@ -472,6 +482,8 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=['plan','build','seal','verify'])
     parser.add_argument('--archive',type=Path)
+    parser.add_argument('--input-kind',choices=['reviewed','editorial-draft'],default='reviewed',
+                        help='Explicitly select the strict reviewed or source-pinned editorial intake')
     parser.add_argument('--forge-root',type=Path,default=ROOT.parent/'integrated-social-item-forge')
     parser.add_argument('--out',type=Path,required=True)
     parser.add_argument('--visual-plan',type=Path,help='Source-bound figure selectors exported by plan')
@@ -490,12 +502,12 @@ def main():
             from press_visuals import make_visual_plan
             from press import write_json
             if args.out.exists(): raise ContractError('OUTPUT_EXISTS')
-            packet=load_revision(args.archive,args.forge_root)
+            packet=load_input(args.archive,args.forge_root,input_kind=args.input_kind)
             write_json(args.out,make_visual_plan(packet['visual_handoff']))
         elif args.command=='build':
             build_revision(args.archive,args.forge_root,args.out,args.visual_plan,args.reference_pdf,
-                           args.reference_map,args.solution_overlay,args.student_overlay)
+                           args.reference_map,args.solution_overlay,args.student_overlay,args.input_kind)
         else:
-            seal_revision(args.archive,args.forge_root,args.out)
+            seal_revision(args.archive,args.forge_root,args.out,args.input_kind)
 
 if __name__=='__main__': main()
