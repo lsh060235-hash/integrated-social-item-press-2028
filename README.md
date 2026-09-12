@@ -38,6 +38,7 @@ python -X utf8 press_revision.py verify --out work/M04-draft
 ```
 
 이 입력은 `input_integrity=PASS`와 `content_status=NOT_REVIEWED`를 분리한다. M02~M04의 `CURRICULUM_COVERAGE` HOLD와 원본이 지적한 어투 단서는 남는다. 제작물은 `DRAFT_FOR_HUMAN_REVIEW`이며 `human_release_approval`은 비어 있다. 도판 파일 해시, 조판 검증, 기술적 봉인은 의미·정답 검수나 Forge→Press 1.1 공식 출고 지원을 뜻하지 않는다. Forge의 통합사회 지원 판정은 `UNSUPPORTED` 그대로 기록한다.
+편집 초안 입력에는 `--student-overlay`와 `--solution-overlay`를 적용할 수 없다. 수정이 필요하면 원본 ZIP의 문항 ID·판본·해시를 근거로 Forge에 반송한다.
 
 실제 PDF 제작에는 Windows, 한컴오피스 한글 COM, FilePathCheckerModule, 함초롬바탕·맑은 고딕·바탕 글꼴이 필요하다. 입력 경로는 자신의 파일로 바꾼다. **제작 코드는 커밋되어 있어야 하며 출력 폴더는 새 경로여야 한다.**
 

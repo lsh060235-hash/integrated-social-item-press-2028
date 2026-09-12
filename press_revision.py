@@ -304,6 +304,8 @@ def build_revision(archive,forge_root,out,visual_plan=None,reference_pdf=None,re
     import fitz
     from press_solutions import apply_editorial,verify_solutions
     packet=load_input(archive,forge_root,input_kind=input_kind)
+    if input_kind=='editorial-draft' and (student_overlay is not None or solution_overlay is not None):
+        raise ContractError('EDITORIAL_DRAFT_OVERLAY_UNSUPPORTED')
     student_editorial=(json.loads(Path(student_overlay).read_text(encoding='utf-8-sig'))
                        if student_overlay else None)
     production_packet=(apply_student_editorial(packet,student_editorial)

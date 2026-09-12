@@ -1,5 +1,6 @@
 """The local editorial path must not manufacture reviewed-delivery evidence."""
 import hashlib
+import inspect
 import json
 import zipfile
 from pathlib import Path
@@ -52,6 +53,17 @@ def mutate(tmp_path, change, *, rebind=False):
     return result, index
 
 
+def use_test_source_profile(tmp_path, monkeypatch, profile):
+    import press_editorial_draft
+    path = tmp_path / 'test-sources.json'
+    path.write_text(json.dumps(profile, ensure_ascii=False), encoding='utf8')
+    monkeypatch.setattr(press_editorial_draft, 'SOURCES', path)
+
+
+def test_public_loader_has_no_trust_override():
+    assert 'trusted_sources' not in inspect.signature(load_editorial_draft).parameters
+
+
 @pytest.mark.integration
 def test_archive_byte_mutation_rejected_without_trusted_rebinding(tmp_path):
     path, _ = mutate(tmp_path, lambda d: d.update({'items.json': d['items.json'] + b'\n'}))
@@ -60,19 +72,20 @@ def test_archive_byte_mutation_rejected_without_trusted_rebinding(tmp_path):
 
 
 @pytest.mark.integration
-def test_student_view_mismatch_rejected_even_with_rebound_hashes(tmp_path):
+def test_student_view_mismatch_rejected_even_with_rebound_hashes(tmp_path, monkeypatch):
     def change(members):
         students = json.loads(members['student_items.json'])
         students[0]['student_view']['choices'][0] = '변조된 선지'
         members['student_items.json'] = json.dumps(students, ensure_ascii=False).encode()
     path, trusted = mutate(tmp_path, change, rebind=True)
+    use_test_source_profile(tmp_path, monkeypatch, trusted)
     with pytest.raises(ValueError, match='STUDENT_VIEW_MISMATCH'):
-        load_editorial_draft(path, FORGE, trusted_sources=trusted)
+        load_editorial_draft(path, FORGE)
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize('target', ['answer', 'choices', 'points'])
-def test_teacher_and_blueprint_inconsistency_rejected(tmp_path, target):
+def test_teacher_and_blueprint_inconsistency_rejected(tmp_path, monkeypatch, target):
     def change(members):
         name = 'blueprint.json' if target == 'points' else 'items.json'
         data = json.loads(members[name])
@@ -81,25 +94,52 @@ def test_teacher_and_blueprint_inconsistency_rejected(tmp_path, target):
         else: data['items'][0]['points'] = 1.5
         members[name] = json.dumps(data, ensure_ascii=False).encode()
     path, trusted = mutate(tmp_path, change, rebind=True)
+    use_test_source_profile(tmp_path, monkeypatch, trusted)
     with pytest.raises(ValueError, match='SCHEMA|BLUEPRINT|ITEM_GATE|STUDENT_VIEW|ANSWER'):
-        load_editorial_draft(path, FORGE, trusted_sources=trusted)
+        load_editorial_draft(path, FORGE)
 
 
 @pytest.mark.integration
-def test_hold_cannot_be_marked_ready_by_untrusted_note(tmp_path):
+def test_hold_cannot_be_marked_ready_by_untrusted_note(tmp_path, monkeypatch):
     def change(members):
         members['READ_FIRST.md'] = b'READY FOR PUBLICATION'
     path, trusted = mutate(tmp_path, change, rebind=True)
-    packet = load_editorial_draft(path, FORGE, trusted_sources=trusted)
+    use_test_source_profile(tmp_path, monkeypatch, trusted)
+    packet = load_editorial_draft(path, FORGE)
     assert packet['status']['blueprint_issue'] == 'CURRICULUM_COVERAGE'
     assert packet['status']['press_status'] == 'DRAFT_FOR_HUMAN_REVIEW'
 
 
 @pytest.mark.integration
-def test_missing_member_rejected_even_with_rebound_hashes(tmp_path):
+def test_missing_member_rejected_even_with_rebound_hashes(tmp_path, monkeypatch):
     path, trusted = mutate(tmp_path, lambda d: d.pop('student_items.json'), rebind=True)
+    use_test_source_profile(tmp_path, monkeypatch, trusted)
     with pytest.raises(ValueError, match='MEMBER_COVERAGE'):
-        load_editorial_draft(path, FORGE, trusted_sources=trusted)
+        load_editorial_draft(path, FORGE)
+
+
+@pytest.mark.integration
+def test_duplicate_choice_evaluation_number_rejected(tmp_path, monkeypatch):
+    def change(members):
+        items = json.loads(members['items.json'])
+        items[0]['choice_evaluations'][1]['choice'] = 1
+        members['items.json'] = json.dumps(items, ensure_ascii=False).encode()
+    path, trusted = mutate(tmp_path, change, rebind=True)
+    use_test_source_profile(tmp_path, monkeypatch, trusted)
+    with pytest.raises(ValueError, match='ANSWER_OR_CHOICES_INVALID'):
+        load_editorial_draft(path, FORGE)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize('overlay_flag', ['student_overlay', 'solution_overlay'])
+def test_editorial_draft_rejects_overlays(tmp_path, overlay_flag):
+    from press_revision import build_revision
+    archive = DELIVERIES / 'M04-editorial-20260912-r1.zip'
+    overlay = tmp_path / 'overlay.json'
+    overlay.write_text('{}', encoding='utf8')
+    with pytest.raises(ValueError, match='EDITORIAL_DRAFT_OVERLAY_UNSUPPORTED'):
+        build_revision(archive, FORGE, tmp_path / 'output',
+                       input_kind='editorial-draft', **{overlay_flag: overlay})
 
 
 @pytest.mark.parametrize('name', ['../escape.txt', 'C:/drive.txt', '/absolute.txt'])
@@ -150,6 +190,7 @@ def test_old_visual_plan_cannot_follow_changed_source():
 def test_explicit_answer_key_on_student_surface_is_rejected():
     from press_verify import student_surface_leaks
     assert student_surface_leaks('1. 다음 물음에 답하시오.\n정답 ③\n① 갑 ② 을 ③ 병 ④ 정 ⑤ 무')
+    assert student_surface_leaks('정답은 ②입니다.')
     assert student_surface_leaks('1. 다음 물음에 답하시오.\n[오답피하기]')
     assert not student_surface_leaks('1. 다음 물음에 답하시오.\n정답을 고르시오.\n① 갑 ② 을 ③ 병 ④ 정 ⑤ 무')
 

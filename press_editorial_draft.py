@@ -58,11 +58,10 @@ def read_editorial_archive(archive, *, expected_sha256, expected_members=None):
     return members
 
 
-def load_editorial_draft(archive, forge_root, *, trusted_sources=None):
+def load_editorial_draft(archive, forge_root):
     """Create a Press-only, unreviewed packet from four bound JSON artifacts."""
     archive = Path(archive)
-    profile = (trusted_sources if trusted_sources is not None else
-               json.loads(SOURCES.read_text(encoding='utf-8')))
+    profile = json.loads(SOURCES.read_text(encoding='utf-8'))
     if profile.get('schema_version') != 'press-editorial-draft-sources-v1':
         raise ContractError('EDITORIAL_SOURCE_PROFILE_INVALID')
     trusted = profile.get('sources', {}).get(archive.name)
@@ -125,7 +124,7 @@ def load_editorial_draft(archive, forge_root, *, trusted_sources=None):
             raise ContractError('STUDENT_VIEW_MISMATCH: ' + item_id)
         if (item['answer'] not in range(1, 6) or
             len(student['student_view']['choices']) != 5 or
-            len(item['choice_evaluations']) != 5):
+            sorted(ev['choice'] for ev in item['choice_evaluations']) != list(range(1, 6))):
             raise ContractError('ANSWER_OR_CHOICES_INVALID: ' + item_id)
         gate = run_gates(item, item_spec=spec)
         if gate['status'] != 'PASS':

@@ -20,7 +20,7 @@ def sha(path):
 
 def student_surface_leaks(text):
     """Detect explicit answer/solution labels on a rendered student surface."""
-    patterns = (r'(?<![가-힣])정답\s*[:：]?\s*[①-⑤1-5](?!\d)',
+    patterns = (r'(?<![가-힣])정답\s*(?:은|[:：])?\s*[①-⑤1-5](?!\d)',
                 r'\[\s*오답\s*피하기\s*\]',
                 r'(?<![가-힣])풀이\s*\d+\s*[.．]')
     return [pattern for pattern in patterns if re.search(pattern, text)]
